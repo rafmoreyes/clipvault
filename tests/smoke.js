@@ -56,6 +56,9 @@ assert.match(renderer, /daysSearch\.oninput = renderDayList/);
 assert.match(renderer, /setDaysOpen\(true, true\)/);
 assert.match(renderer, /e\.target\?\.closest\?\.\('#days-panel'\)/);
 assert.match(main, /'date-nav\.js'/);
+assert.match(main, /'multi-select\.js'/);
+assert.ok(pkg.scripts.test.includes('asset-allowlist.test.js'));
+
 assert.match(html, /id="days-panel"/);
 assert.match(html, /id="days-search"/);
 assert.match(html, /date-nav\.js/);

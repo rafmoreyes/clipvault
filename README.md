@@ -1,4 +1,4 @@
-# ClipVault — Build 0.6.0 (seleção múltipla + armazenamento)
+# ClipVault — Build 0.6.1 (hotfix captura e canvas)
 
 Vault de imagens para **Windows 11**, inteiramente local. Captura imagens copiadas para o clipboard e organiza automaticamente em um canvas infinito com um frame por dia.
 
@@ -142,3 +142,15 @@ A virtualização e a geração local de miniaturas da versão 0.3 são mantidas
 5. Teste **Esvaziar lixeira** apenas com imagens descartáveis: essa operação é definitiva.
 
 `npm.cmd test` executa também cenários automatizados de armazenamento, movimentação para a lixeira, colisões de nomes e restauração. O Electron/Windows precisa de validação prática antes da aprovação da build 0.6.
+
+## Build 0.6.1 — Correção urgente do canvas / captura aparentemente parada
+
+**Causa identificada:** desde a 0.5, `renderer/index.html` incluía o script `multi-select.js`, porém o servidor local `vault://app` em `main.js` não autorizava seu carregamento. O JavaScript do renderer falhava ao inicializar e, por isso, o canvas não registrava os eventos visuais de novas capturas. O monitor do clipboard do processo principal não sofreu alterações.
+
+- O hotfix inclui `multi-select.js` na allowlist explícita do protocolo local, sem abrir permissão para outros arquivos.
+- Novo teste `tests/asset-allowlist.test.js` verifica que todo `<script>` e stylesheet presente no `index.html` está na allowlist e existe no disco. Evita repetir essa regressão.
+- Os recursos da 0.5 e da 0.6 permanecem; nenhuma captura antiga é apagada ou migrada.
+- **Se as imagens foram capturadas durante a falha:** elas podem já estar em `ClipVaultData\AAAA-MM-DD` e voltarão a aparecer na abertura após o hotfix.
+- Encerre completamente via bandeja **Sair** antes de substituir/reabrir o executável. Recompile com `git pull`, `npm.cmd test`, `npm.cmd run build:win` e execute `dist\ClipVault.exe`.
+
+Teste real no Windows ainda é necessário antes de aprovar esta hotfix como baseline.
