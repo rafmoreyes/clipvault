@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('vault', {
   load: () => ipcRenderer.invoke('load'),
   saveLayout: l => ipcRenderer.invoke('saveLayout', l),
+  saveFrames: frames => ipcRenderer.invoke('saveFrames', frames),
   del: (ids, positions) => ipcRenderer.invoke('del', ids, positions),
   delDay: (d, positions) => ipcRenderer.invoke('delDay', d, positions),
   copyImage: id => ipcRenderer.invoke('copyImage', id),

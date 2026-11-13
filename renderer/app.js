@@ -2,6 +2,7 @@
 
 const $ = id => document.getElementById(id);
 const root = $('root'), world = $('world'), state = $('state'), feedback = $('copy-feedback');
+const modePan = $('tool-pan'), modeSelect = $('tool-select'), marqueeBox = $('marquee-box');
 const daysToggle = $('days-toggle'), daysPanel = $('days-panel'), daysClose = $('days-close');
 const daysSearch = $('days-search'), daysList = $('days-list'), daysResults = $('days-results');
 const daysSummary = $('days-summary'), daysLatest = $('days-latest');
@@ -14,13 +15,15 @@ const storageCacheSize = $('storage-cache-size'), storageTrashSize = $('storage-
 const storageClean = $('storage-clean'), storageEmpty = $('storage-empty'), storageRefresh = $('storage-refresh');
 const { worldViewport, intersects } = window.ClipVaultVisibility;
 const { formatDay, filterDays } = window.ClipVaultDateNav;
-const { orderedIds, rangeBetween, dragPositions } = window.ClipVaultSelection;
+const { orderedIds, rangeBetween, dragPositions, rectFromPoints, hitsRectangle } = window.ClipVaultSelection;
 
 const MES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const HEAD = 90, CELL = 320, GAP = 24, COLS = 5;
 const IMAGE_ID = /^\d{4}-\d{2}-\d{2}\/[\w-]+\.png$/;
 const THUMB_SIZE = 512;
 const days = new Map(), itemById = new Map();
+const namedFrames = new Map();
+let frameCounter = 0, toolMode = 'pan';
 let layout = {}, view = { x: 60, y: 60, k: 0.5 };
 let sel = null, saveTimer, visibleFrame = 0, ready = false, positionChanged = false;
 const selected = new Set();
@@ -478,6 +481,7 @@ function relayout() {
     y += D.height + 60;
   }
   renderDayList();
+  updateNamedFrames();
   scheduleVisible();
 }
 function place(it) {
@@ -490,6 +494,163 @@ function place(it) {
     height: hOf(it) + 'px'
   });
 }
+
+function saveNamedFrames() {
+  const frames = [...namedFrames.values()].map(frame => ({
+    id: frame.id, name: frame.name, ids: [...frame.ids]
+  }));
+  void vault.saveFrames(frames).catch(err => {
+    console.error('[ClipVault] Não foi possível salvar frames:', err);
+    showBatchFeedback('Falha ao salvar os frames', true);
+  });
+}
+function namedFrameBounds(frame) {
+  const images = frame.ids.map(id => itemById.get(id)).filter(Boolean);
+  if (!images.length) return null;
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const item of images) {
+    const position = layout[item.id];
+    if (!position) continue;
+    const y = item.D.y + HEAD + position.y;
+    left = Math.min(left, position.x);
+    right = Math.max(right, position.x + position.w);
+    top = Math.min(top, y);
+    bottom = Math.max(bottom, y + hOf(item));
+  }
+  if (!Number.isFinite(left)) return null;
+  // Área acima da seleção reserva espaço para o nome sem mover os PNGs.
+  return { left: Math.max(0, left - 22), top: top - 48,
+    width: right - Math.max(0, left - 22) + 22,
+    height: bottom - top + 70 };
+}
+function updateNamedFrames() {
+  for (const frame of namedFrames.values()) {
+    if (!frame.el) continue;
+    const box = namedFrameBounds(frame);
+    frame.el.hidden = !box;
+    if (!box) continue;
+    Object.assign(frame.el.style, {
+      left: box.left + 'px',
+      top: box.top + 'px',
+      width: box.width + 'px',
+      height: box.height + 'px'
+    });
+  }
+}
+function finishFrameEdit(frame, save) {
+  if (!frame.editing) return;
+  frame.editing = false;
+  const newName = frame.input.value.trim().slice(0, 80);
+  if (save && newName) frame.name = newName;
+  frame.button.textContent = frame.name;
+  frame.input.hidden = true;
+  frame.button.hidden = false;
+  saveNamedFrames();
+}
+function beginFrameEdit(frame) {
+  if (frame.editing) return;
+  frame.editing = true;
+  frame.button.hidden = true;
+  frame.input.hidden = false;
+  frame.input.value = frame.name;
+  frame.input.focus();
+  frame.input.select();
+}
+function mountNamedFrame(frame) {
+  const el = document.createElement('div');
+  el.className = 'named-frame';
+  const bar = document.createElement('div');
+  bar.className = 'named-frame-bar';
+  const name = document.createElement('button');
+  name.className = 'named-frame-name';
+  name.type = 'button';
+  name.textContent = frame.name;
+  name.title = 'Clique para renomear';
+  const input = document.createElement('input');
+  input.className = 'named-frame-input';
+  input.type = 'text';
+  input.maxLength = 80;
+  input.hidden = true;
+  input.setAttribute('aria-label', 'Nome do frame');
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'named-frame-remove';
+  remove.textContent = '×';
+  remove.title = 'Remover apenas o frame, sem apagar imagens';
+  remove.setAttribute('aria-label', 'Remover frame sem apagar imagens');
+  frame.el = el; frame.button = name; frame.input = input; frame.editing = false;
+  bar.onpointerdown = e => e.stopPropagation();
+  name.onclick = () => beginFrameEdit(frame);
+  input.onkeydown = e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finishFrameEdit(frame, true); }
+    if (e.key === 'Escape') { e.preventDefault(); finishFrameEdit(frame, false); }
+  };
+  input.onblur = () => finishFrameEdit(frame, true);
+  remove.onclick = () => {
+    if (frame.editing) finishFrameEdit(frame, false);
+    namedFrames.delete(frame.id);
+    frame.el.remove();
+    saveNamedFrames();
+  };
+  bar.append(name, input, remove);
+  el.append(bar);
+  world.append(el);
+}
+function restoreNamedFrames(values) {
+  if (!Array.isArray(values)) return;
+  for (const value of values) {
+    if (!value || typeof value.id !== 'string' || typeof value.name !== 'string' ||
+        namedFrames.has(value.id) || !Array.isArray(value.ids)) continue;
+    const ids = [...new Set(value.ids.filter(id => itemById.has(id)))];
+    if (!ids.length) continue;
+    const frame = { id: value.id, name: value.name, ids };
+    namedFrames.set(frame.id, frame);
+    mountNamedFrame(frame);
+  }
+  updateNamedFrames();
+}
+function discardNamedFrameMembers(ids) {
+  const removed = new Set(ids);
+  let dirty = false;
+  for (const frame of [...namedFrames.values()]) {
+    const kept = frame.ids.filter(id => !removed.has(id));
+    if (kept.length === frame.ids.length) continue;
+    dirty = true;
+    frame.ids = kept;
+    if (!kept.length) {
+      frame.el?.remove();
+      namedFrames.delete(frame.id);
+    }
+  }
+  if (dirty) saveNamedFrames();
+}
+function createNamedFrame() {
+  if (!selected.size) return;
+  if (selected.size > 2000) {
+    showBatchFeedback('Selecione no máximo 2.000 imagens por frame', true);
+    return;
+  }
+  const ids = [...selected].filter(id => itemById.has(id));
+  if (!ids.length) return;
+  // Uma imagem participa de um frame nomeado por vez.
+  for (const frame of [...namedFrames.values()]) {
+    frame.ids = frame.ids.filter(id => !selected.has(id));
+    if (!frame.ids.length) { frame.el?.remove(); namedFrames.delete(frame.id); }
+  }
+  const frame = {
+    id: 'f_' + Date.now().toString(36) + '_' + (++frameCounter).toString(36),
+    name: 'Frame ' + (namedFrames.size + 1),
+    ids
+  };
+  namedFrames.set(frame.id, frame);
+  mountNamedFrame(frame);
+  updateNamedFrames();
+  select(null);
+  saveNamedFrames();
+  beginFrameEdit(frame);
+}
+
 function preferredSrc(it) {
   const onScreenSize = Math.max(layout[it.id].w, hOf(it)) * view.k;
   if (it.thumbnailUnavailable) return 'vault://data/' + it.id;
@@ -542,6 +703,7 @@ function bindDrag(it) {
         }
       }
       if (grows) relayout();
+      else updateNamedFrames();
     };
     const finish = cancelled => {
       img.onpointermove = img.onpointerup = img.onpointercancel = null;
@@ -636,24 +798,91 @@ function addBatch(items) {
   relayout();
   if (positionChanged) { positionChanged = false; save(); }
 }
+function setToolMode(next) {
+  toolMode = next === 'select' ? 'select' : 'pan';
+  root.classList.toggle('select-mode', toolMode === 'select');
+  modePan.classList.toggle('is-active', toolMode === 'pan');
+  modeSelect.classList.toggle('is-active', toolMode === 'select');
+  modePan.setAttribute('aria-pressed', String(toolMode === 'pan'));
+  modeSelect.setAttribute('aria-pressed', String(toolMode === 'select'));
+}
+modePan.onclick = () => setToolMode('pan');
+modeSelect.onclick = () => setToolMode('select');
+root.addEventListener('contextmenu', e => e.preventDefault());
+
+function worldFromScreen(x, y) {
+  return { x: (x - view.x) / view.k, y: (y - view.y) / view.k };
+}
+function itemRects() {
+  return [...itemById.values()].map(item => {
+    const p = layout[item.id];
+    const top = item.D.y + HEAD + p.y;
+    return { id: item.id, left: p.x, right: p.x + p.w,
+      top, bottom: top + hOf(item) };
+  });
+}
 root.onpointerdown = e => {
-  if (e.button !== 0) return;
-  select(null);
-  root.classList.add('pan');
+  if (e.button === 0) {
+    // Pan migrou para RMB. Clique no fundo agora apenas limpa a seleção.
+    select(null);
+    return;
+  }
+  if (e.button !== 2 || batchBusy || storageBusy) return;
+  e.preventDefault();
   root.setPointerCapture(e.pointerId);
-  let lx = e.clientX, ly = e.clientY;
+  const sx = e.clientX, sy = e.clientY;
+  if (toolMode === 'pan') {
+    root.classList.add('pan');
+    let lx = sx, ly = sy;
+    root.onpointermove = m => {
+      view.x += m.clientX - lx;
+      view.y += m.clientY - ly;
+      lx = m.clientX; ly = m.clientY;
+      apply();
+    };
+    const stop = () => {
+      root.classList.remove('pan');
+      root.onpointermove = root.onpointerup = root.onpointercancel = null;
+    };
+    root.onpointerup = stop;
+    root.onpointercancel = stop;
+    return;
+  }
+
+  // Select mode: RMB desenha retângulo em coordenadas de tela; o teste de
+  // interseção usa coordenadas do mundo e funciona mesmo com itens virtualizados.
+  let moved = false, ex = sx, ey = sy;
+  const selectedBefore = new Set(selected);
+  marqueeBox.hidden = true;
   root.onpointermove = m => {
-    view.x += m.clientX - lx;
-    view.y += m.clientY - ly;
-    lx = m.clientX; ly = m.clientY;
-    apply();
+    ex = m.clientX; ey = m.clientY;
+    if (!moved && Math.hypot(ex - sx, ey - sy) < 4) return;
+    moved = true;
+    const rect = rectFromPoints(sx, sy, ex, ey);
+    Object.assign(marqueeBox.style, { left: rect.left + 'px',
+      top: rect.top + 'px', width: (rect.right - rect.left) + 'px',
+      height: (rect.bottom - rect.top) + 'px' });
+    marqueeBox.hidden = false;
   };
-  const stop = () => {
-    root.classList.remove('pan');
+  const stop = cancelled => {
     root.onpointermove = root.onpointerup = root.onpointercancel = null;
+    marqueeBox.hidden = true;
+    if (cancelled) return;
+    if (!moved) {
+      if (!e.ctrlKey && !e.shiftKey) select(null);
+      return;
+    }
+    const start = worldFromScreen(sx, sy);
+    const finish = worldFromScreen(ex, ey);
+    const rect = rectFromPoints(start.x, start.y, finish.x, finish.y);
+    const ids = hitsRectangle(itemRects(), rect);
+    const combined = (e.ctrlKey || e.shiftKey) ? new Set(selectedBefore) : new Set();
+    for (const id of ids) combined.add(id);
+    const primary = ids.at(-1) || [...combined].at(-1) || null;
+    changeSelection(combined, primary, primary, true);
   };
-  root.onpointerup = stop;
-  root.onpointercancel = stop;
+  root.onpointerup = () => stop(false);
+  root.onpointercancel = () => stop(true);
 };
 root.addEventListener('wheel', e => {
   e.preventDefault();
@@ -678,6 +907,7 @@ function forgetItems(ids) {
     delete layout[id];
   }
   discardSelected(ids);
+  discardNamedFrameMembers(ids);
   for (const D of affectedDays) {
     if (D.items.length === 0) {
       D.el.remove();
@@ -774,6 +1004,16 @@ addEventListener('keydown', e => {
       e.target?.closest?.('#storage-panel') ||
       e.target?.closest?.('#selection-toolbar') ||
       e.target?.matches?.('input, textarea, [contenteditable="true"]')) return;
+  if (!e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && !e.repeat && key === 's') {
+    e.preventDefault();
+    setToolMode(toolMode === 'pan' ? 'select' : 'pan');
+    return;
+  }
+  if (!e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && !e.repeat && key === 'f' && selected.size) {
+    e.preventDefault();
+    createNamedFrame();
+    return;
+  }
   if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && selected.size) {
     e.preventDefault();
     if (!e.repeat && selected.size === 1) void copySelected(sel);
@@ -802,6 +1042,7 @@ vault.load().then(result => {
     ? result.layout : {};
   setState(result.paused);
   addBatch([...result.items, ...pendingNew]);
+  restoreNamedFrames(result.frames);
   pendingNew.length = 0;
   const first = filterDays(dayStats(), '')[0];
   if (!activeDay && first) activeDay = first.day;

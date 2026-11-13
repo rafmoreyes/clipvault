@@ -26,7 +26,17 @@
     return entries.map(entry => ({ id: entry.id,
       x: Math.round(entry.x + moveX), y: Math.round(entry.y + moveY) }));
   }
-  const api = { orderedIds, rangeBetween, dragPositions };
+  function rectFromPoints(ax, ay, bx, by) {
+    return { left: Math.min(ax, bx), top: Math.min(ay, by),
+      right: Math.max(ax, bx), bottom: Math.max(ay, by) };
+  }
+  function hitsRectangle(entries, rect) {
+    return entries.filter(entry =>
+      entry.left <= rect.right && entry.right >= rect.left &&
+      entry.top <= rect.bottom && entry.bottom >= rect.top
+    ).map(entry => entry.id);
+  }
+  const api = { orderedIds, rangeBetween, dragPositions, rectFromPoints, hitsRectangle };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ClipVaultSelection = api;
 })(typeof window !== 'undefined' ? window : globalThis);

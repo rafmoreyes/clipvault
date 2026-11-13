@@ -221,3 +221,71 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #12151c; col
 .storage-restore:focus-visible, #storage-clean:focus-visible,
 #storage-empty:focus-visible { outline: 2px solid #5ee0c1; outline-offset: 2px; }
 @media (max-width: 650px) { #selection-toolbar { top: auto; } }
+
+
+/* 0.7 — Pan/Select e frames nomeáveis. Nada cobre os cliques nas imagens. */
+#mode-control {
+  position: fixed; z-index: 25; top: 12px; left: 50%;
+  transform: translateX(-50%); display: flex; align-items: center;
+  gap: 3px; padding: 4px; border: 1px solid #405069;
+  border-radius: 11px; background: #222938; box-shadow: 0 6px 22px #0006;
+}
+#mode-control button {
+  color: #a1aec2; background: transparent; border: 0; border-radius: 7px;
+  padding: 7px 13px; font: 600 12px "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+#mode-control button:hover { background: #374455; color: #fff; }
+#mode-control button.is-active { color: #152a2a; background: #5ee0c1; }
+#mode-control button:focus-visible { outline: 2px solid #5ee0c1; outline-offset: 2px; }
+#root.select-mode { cursor: crosshair; }
+#root.select-mode .it { cursor: crosshair; }
+#root.pan { cursor: grabbing; }
+#marquee-box {
+  box-sizing: border-box; position: fixed; z-index: 30;
+  pointer-events: none; border: 1px solid #7bf4d4;
+  background: #5ee0c126; outline: 1px solid #1b3435;
+  border-radius: 2px;
+}
+#marquee-box[hidden] { display: none; }
+.frame { z-index: 0; }
+.named-frame {
+  position: absolute; z-index: 4; pointer-events: none;
+  box-sizing: border-box; border-radius: 10px;
+  border: 2px solid #79cfba; background: #5ee0c108;
+  box-shadow: 0 0 0 1px #132f30;
+}
+.named-frame-bar {
+  position: absolute; top: 4px; left: 8px; right: 8px;
+  height: 28px; display: flex; align-items: center; gap: 6px;
+  pointer-events: none;
+}
+.named-frame-name {
+  pointer-events: auto; border: 0; border-radius: 6px;
+  padding: 4px 9px; max-width: calc(100% - 30px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: #aaf8df; background: #1b3439;
+  font: 600 13px "Segoe UI", system-ui, sans-serif; cursor: text;
+}
+.named-frame-name:hover { background: #2c5151; }
+.named-frame-input {
+  box-sizing: border-box; pointer-events: auto; min-width: 90px; width: 240px;
+  max-width: calc(100% - 30px); border-radius: 6px;
+  background: #111c27; color: #d5ffee; border: 1px solid #5ee0c1;
+  outline: none; font: 600 13px "Segoe UI", system-ui, sans-serif;
+  padding: 4px 9px;
+}
+.named-frame-input[hidden] { display: none; }
+.named-frame-remove {
+  margin-left: auto; pointer-events: auto; border: 0;
+  border-radius: 6px; color: #99c9c3; background: #254044;
+  font-size: 15px; cursor: pointer; line-height: 1;
+  padding: 5px 7px;
+}
+.named-frame-remove:hover { color: #fff; background: #864a47; }
+.named-frame-name:focus-visible, .named-frame-remove:focus-visible {
+  outline: 2px solid #5ee0c1; outline-offset: 2px;
+}
+@media (max-width: 700px) {
+  #mode-control { top: 58px; }
+}

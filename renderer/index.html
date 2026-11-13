@@ -4,6 +4,11 @@
 <title>ClipVault</title><link rel="stylesheet" href="style.css"></head>
 <body>
 <div id="root"><div id="world"></div></div>
+<div id="marquee-box" hidden aria-hidden="true"></div>
+<div id="mode-control" role="group" aria-label="Ferramenta do canvas">
+  <button id="tool-pan" type="button" class="is-active" aria-pressed="true" title="Pan com botão direito">Pan</button>
+  <button id="tool-select" type="button" aria-pressed="false" title="Seleção retangular com botão direito (S)">Select</button>
+</div>
 <button id="days-toggle" type="button" aria-controls="days-panel" aria-expanded="false" title="Navegar por datas (Ctrl+F)">
   <span aria-hidden="true">▦</span> Dias
 </button>
@@ -45,12 +50,12 @@
 </aside>
 <section id="selection-toolbar" hidden aria-label="Operações com imagens selecionadas">
   <span id="selection-count">0 selecionadas</span>
-  <span id="selection-hint">Ctrl+Clique · Shift+Clique</span>
+  <span id="selection-hint">Ctrl/Shift+Clique · F: criar frame</span>
   <button id="selection-export" type="button">Exportar</button>
   <button id="selection-delete" type="button">Apagar</button>
   <button id="selection-clear" type="button" aria-label="Limpar seleção">×</button>
 </section>
-<div id="hud"><b id="state"></b><span>Clique na imagem para copiar • Ctrl+V em outro app • Ctrl+C: copiar selecionada • Del: apagar • Scroll: zoom • Ctrl+Alt+P: pausar</span><span id="copy-feedback" role="status" aria-live="polite"></span></div>
+<div id="hud"><b id="state"></b><span>RMB: Pan/Select • S: alternar ferramenta • F: frame • Ctrl+V: colar • Del: lixeira • Scroll: zoom • Ctrl+Alt+P: pausar</span><span id="copy-feedback" role="status" aria-live="polite"></span></div>
 <script src="visibility.js"></script>
 <script src="date-nav.js"></script>
 <script src="multi-select.js"></script>

@@ -7,6 +7,7 @@ const { saveCapturePng } = require('./capture-name');
 const { getThumbnailPath, removeThumbnail } = require('./thumbnail-cache');
 const { validatedIds, exportImages } = require('./batch-files');
 const { storageSnapshot, trashImages, trashDays, restoreTrash, emptyTrash } = require('./storage-manager');
+const { readFrames, saveFrames } = require('./frame-store');
 
 // Dados ficam FORA da pasta do projeto (nunca vao pro GitHub)
 const DATA = path.join(os.homedir(), 'ClipVaultData');
@@ -133,7 +134,7 @@ function openWin() {
 }
 
 const fromUI = e => Boolean(e.senderFrame && e.senderFrame.url === 'vault://app/index.html');
-ipcMain.handle('load', async e => fromUI(e) ? { items: await listAll(), layout: readLayout(), paused } : null);
+ipcMain.handle('load', async e => fromUI(e) ? { items: await listAll(), layout: readLayout(), frames: readFrames(DATA), paused } : null);
 // Copia apenas um PNG já salvo. A cópia não cria um novo item no Vault.
 ipcMain.handle('copyImage', (e, id) => {
   if (!fromUI(e) || typeof id !== 'string' || !FILE.test(id)) throw new Error('Imagem inválida');
@@ -151,6 +152,10 @@ ipcMain.handle('copyImage', (e, id) => {
   });
   copyQueue = job.catch(() => {});
   return job.finally(() => { copyPending--; });
+});
+ipcMain.handle('saveFrames', (e, frames) => {
+  if (!fromUI(e)) throw new Error('Origem não autorizada');
+  return saveFrames(DATA, frames);
 });
 ipcMain.handle('saveLayout', (e, l) => {
   if (!fromUI(e) || !l || typeof l !== 'object' || Array.isArray(l)) return;
