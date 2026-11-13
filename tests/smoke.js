@@ -9,7 +9,7 @@ const pkg = JSON.parse(read('package.json'));
 assert.equal(pkg.main, 'main.js');
 assert.equal(pkg.scripts.start, 'electron .');
 assert.ok(/^\d+\.\d+\.\d+$/.test(pkg.devDependencies.electron));
-for (const p of ['main.js', 'preload.js', 'renderer/app.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
+for (const p of ['main.js', 'preload.js', 'renderer/app.js', 'clipboard-image.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
 const main = read('main.js');
 const html = read('renderer/index.html');
 const ignore = read('.gitignore');
@@ -17,11 +17,28 @@ assert.match(main, /ClipVaultData/);
 assert.match(main, /contextIsolation:\s*true/);
 assert.match(main, /nodeIntegration:\s*false/);
 assert.match(main, /sandbox:\s*true/);
-assert.match(main, /clipboard\.readImage\(\)/);
+assert.match(main, /readClipboardImage\(clipboard, nativeImage\)/);
+assert.doesNotMatch(main, /clipboard\.readImage\(/);
 assert.match(main, /onBeforeRequest/);
 assert.match(main, /FILE\.test\(relative\)/);
 assert.match(html, /Content-Security-Policy/);
 assert.match(html, /default-src 'none'/);
 for (const p of ['renderer/app.js', 'renderer/style.css']) assert.ok(fs.existsSync(path.join(base, p)), p);
 for (const ext of ['png', 'jpg', 'jpeg', 'gif', 'webp']) assert.ok(ignore.includes('*.' + ext), ext + ' precisa ser ignorado');
-console.log('ClipVault Build 001: smoke tests estaticos OK.');
+const { readClipboardImage } = require('../clipboard-image');
+async function testClipboard() {
+  const bytes = Uint8Array.from([137, 80, 78, 71, 1, 2]);
+  const native = { createFromBuffer: raw => ({ isEmpty: () => false, getSize: () => ({ width: 14, height: 12 }), toPNG: () => raw }) };
+  const source = { read: async () => [{ types: ['text/plain', 'image/png'], getType: async type => {
+    assert.equal(type, 'image/png');
+    return new Blob([bytes], { type });
+  } }] };
+  const img = await readClipboardImage(source, native);
+  assert.equal(img.width, 14);
+  assert.equal(img.height, 12);
+  assert.deepEqual(img.png, Buffer.from(bytes));
+  const textOnly = { read: async () => [{ types: ['text/plain'], getType: () => { throw Error('nao deve ler texto'); } }] };
+  assert.equal(await readClipboardImage(textOnly, native), null);
+  console.log('ClipVault Build 001: smoke tests e clipboard assincrono OK.');
+}
+testClipboard().catch(err => { console.error(err); process.exitCode = 1; });

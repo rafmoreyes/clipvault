@@ -32,3 +32,7 @@ Para atualizar depois: `git pull`, seguido de `npm install` caso o `package.json
 ## Validação
 
 `npm test` executa smoke tests estáticos: sintaxe JavaScript, estrutura, CSP, isolamento do Electron e proteção dos dados. Um teste real de clipboard/tray no Windows continua necessário.
+
+## Atualização Electron 45
+
+A captura usa a API assíncrona `clipboard.read()` e `ClipboardItem.getType()`. No Windows PowerShell: `npm.cmd test` e `npm.cmd start`.

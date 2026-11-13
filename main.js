@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, clipboard, nativeImage, protocol, net, ipcMain, session, globalShortcut } = require('electron');
 const path = require('path'), fs = require('fs'), os = require('os'), crypto = require('crypto');
 const { pathToFileURL } = require('url');
+const { readClipboardImage } = require('./clipboard-image');
 
 // Dados ficam FORA da pasta do projeto (nunca vao pro GitHub)
 const DATA = path.join(os.homedir(), 'ClipVaultData');
@@ -11,8 +12,9 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'vault', privileges: { standard:
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let win, tray, paused = false, lastHash = null;
+let captureBusy = false, priming = false, generation = 0;
 const two = n => String(n).padStart(2, '0');
-const hashOf = img => crypto.createHash('sha256').update(img.toBitmap()).digest('hex');
+const hashOf = png => crypto.createHash('sha256').update(png).digest('hex');
 const icon = ([r, g, b]) => { const buf = Buffer.alloc(1024); for (let i = 0; i < 256; i++) buf.set([b, g, r, 255], i * 4); return nativeImage.createFromBitmap(buf, { width: 16, height: 16 }); };
 
 function dims(f) {
@@ -41,35 +43,48 @@ function listAll() {
 }
 const readLayout = () => { try { const l = JSON.parse(fs.readFileSync(LAYOUT, 'utf8')); return l && typeof l === 'object' && !Array.isArray(l) ? l : {}; } catch { return {}; } };
 
-function tick() {
-  if (paused) return;
+async function tick() {
+  if (paused || priming || captureBusy) return;
+  captureBusy = true;
+  const currentGeneration = generation;
   try {
-    // Le apenas a representacao de imagem do clipboard; texto nunca e lido.
-    const img = clipboard.readImage();
-    if (img.isEmpty()) { lastHash = null; return; }
-    const h = hashOf(img);
+    const result = await readClipboardImage(clipboard, nativeImage);
+    if (paused || priming || currentGeneration !== generation) return;
+    if (!result) { lastHash = null; return; }
+    const { png, width, height } = result;
+    const h = hashOf(png);
     if (h === lastHash) return;
-    const png = img.toPNG(), size = img.getSize();
     const d = new Date();
     const day = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
     const name = `${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}${String(d.getMilliseconds()).padStart(3, '0')}-${h.slice(0, 10)}.png`;
     const dir = path.join(DATA, day);
-    fs.mkdirSync(dir, { recursive: true });
+    await fs.promises.mkdir(dir, { recursive: true });
+    if (paused || priming || currentGeneration !== generation) return;
+    await fs.promises.writeFile(path.join(dir, name), png, { flag: 'wx' });
     lastHash = h;
-    fs.writeFile(path.join(dir, name), png, err => {
-      if (err) { console.error('[ClipVault] Falha ao salvar imagem:', err); return; }
-      if (win && !win.isDestroyed()) win.webContents.send('new-image', { id: `${day}/${name}`, w: size.width, h: size.height });
-    });
+    if (win && !win.isDestroyed()) win.webContents.send('new-image', { id: `${day}/${name}`, w: width, h: height });
   } catch (err) { console.error('[ClipVault] Falha na captura:', err); }
+  finally { captureBusy = false; }
 }
-function setPaused(p) {
-  paused = p;
-  if (!p) { const i = clipboard.readImage(); lastHash = i.isEmpty() ? null : hashOf(i); } // ignora o que foi copiado na pausa
-  tray.setImage(icon(p ? [120, 120, 120] : [94, 224, 193]));
-  tray.setToolTip(p ? 'ClipVault (pausado)' : 'ClipVault (capturando)');
+
+async function setPaused(p) {
+  paused = Boolean(p);
+  const currentGeneration = ++generation;
+  priming = !paused;
+  if (!paused) {
+    try {
+      const result = await readClipboardImage(clipboard, nativeImage);
+      if (currentGeneration === generation) lastHash = result ? hashOf(result.png) : null;
+    } catch (err) { console.error('[ClipVault] Falha ao inicializar clipboard:', err); }
+    finally { if (currentGeneration === generation) priming = false; }
+  }
+  if (currentGeneration !== generation) return;
+  tray.setImage(icon(paused ? [120, 120, 120] : [94, 224, 193]));
+  tray.setToolTip(paused ? 'ClipVault (pausado)' : 'ClipVault (capturando)');
   tray.setContextMenu(buildMenu());
-  if (win) win.webContents.send('paused', p);
+  if (win && !win.isDestroyed()) win.webContents.send('paused', paused);
 }
+
 const buildMenu = () => Menu.buildFromTemplate([
   { label: 'Abrir canvas', click: openWin },
   { label: paused ? 'Retomar captura' : 'Pausar captura', click: () => setPaused(!paused) },
@@ -106,7 +121,7 @@ ipcMain.handle('delDay', (e, d) => {
 app.on('second-instance', openWin);
 app.on('window-all-closed', () => {}); // continua rodando na bandeja
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   fs.mkdirSync(DATA, { recursive: true });
   // Sem rede: so o protocolo interno (vault://) e permitido
   session.defaultSession.webRequest.onBeforeRequest((d, cb) => cb({ cancel: !/^(vault|file|devtools|data):/.test(d.url) }));
@@ -128,10 +143,8 @@ app.whenReady().then(() => {
   });
   tray = new Tray(icon([94, 224, 193]));
   tray.on('click', openWin);
-  const cur = clipboard.readImage();
-  lastHash = cur.isEmpty() ? null : hashOf(cur); // nao salva o que ja estava no clipboard ao abrir
-  setPaused(false);
-  globalShortcut.register('Control+Alt+P', () => setPaused(!paused));
-  setInterval(tick, 700);
+  await setPaused(false);
+  globalShortcut.register('Control+Alt+P', () => { void setPaused(!paused); });
+  setInterval(() => { void tick(); }, 700);
   openWin();
-});
+}).catch(err => { console.error('[ClipVault] Falha ao iniciar:', err); app.quit(); });
