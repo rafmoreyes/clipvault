@@ -5,7 +5,8 @@ const { readClipboardImage } = require('./clipboard-image');
 const { copyVaultImage } = require('./clipboard-out');
 const { saveCapturePng } = require('./capture-name');
 const { getThumbnailPath, removeThumbnail } = require('./thumbnail-cache');
-const { validatedIds, exportImages, deleteImages } = require('./batch-files');
+const { validatedIds, exportImages } = require('./batch-files');
+const { storageSnapshot, trashImages, trashDays, restoreTrash, emptyTrash } = require('./storage-manager');
 
 // Dados ficam FORA da pasta do projeto (nunca vao pro GitHub)
 const DATA = path.join(os.homedir(), 'ClipVaultData');
@@ -170,23 +171,36 @@ ipcMain.handle('exportMany', async (e, ids) => {
   }
   return exportImages(DATA, choice.filePaths[0], selected);
 });
-ipcMain.handle('deleteMany', (e, ids) => {
+// Toda remoção da versão 0.6 move o PNG para a lixeira local.
+ipcMain.handle('deleteMany', (e, ids, positions) => {
   if (!fromUI(e)) throw new Error('Origem não autorizada');
-  return deleteImages(DATA, ids, removeThumbnail);
+  return trashImages(DATA, ids, positions, removeThumbnail);
 });
-
-ipcMain.handle('del', async (e, ids) => {
-  if (!fromUI(e) || !Array.isArray(ids)) return;
-  for (const id of ids) {
-    if (!FILE.test(id)) continue;
-    await fs.promises.rm(path.join(DATA, ...id.split('/')), { force: true });
-    await removeThumbnail(DATA, id);
-  }
+ipcMain.handle('del', (e, ids, positions) => {
+  if (!fromUI(e)) throw new Error('Origem não autorizada');
+  return trashImages(DATA, ids, positions, removeThumbnail);
 });
-ipcMain.handle('delDay', async (e, day) => {
-  if (!fromUI(e) || !DAY.test(day)) return;
-  await fs.promises.rm(path.join(DATA, day), { recursive: true, force: true });
-  await fs.promises.rm(path.join(DATA, '.thumbnails', day), { recursive: true, force: true });
+ipcMain.handle('delDay', (e, day, positions) => {
+  if (!fromUI(e) || !DAY.test(day)) throw new Error('Dia inválido');
+  return trashDays(DATA, [day], positions, removeThumbnail);
+});
+ipcMain.handle('trashDays', (e, days, positions) => {
+  if (!fromUI(e)) throw new Error('Origem não autorizada');
+  return trashDays(DATA, days, positions, removeThumbnail);
+});
+ipcMain.handle('storageSnapshot', e => {
+  if (!fromUI(e)) throw new Error('Origem não autorizada');
+  return storageSnapshot(DATA);
+});
+ipcMain.handle('restoreTrash', async (e, token) => {
+  if (!fromUI(e)) throw new Error('Origem não autorizada');
+  const restored = await restoreTrash(DATA, token);
+  const { w, h } = await dims(path.join(DATA, ...restored.id.split('/')));
+  return { ...restored, w, h };
+});
+ipcMain.handle('emptyTrash', e => {
+  if (!fromUI(e)) throw new Error('Origem não autorizada');
+  return emptyTrash(DATA);
 });
 
 app.on('second-instance', openWin);

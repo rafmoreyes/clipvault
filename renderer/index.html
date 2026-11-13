@@ -18,6 +18,31 @@
   <div id="days-list" role="list" aria-label="Dias com capturas"></div>
   <button id="days-latest" type="button">Voltar ao dia mais recente</button>
 </aside>
+<button id="storage-toggle" type="button" aria-controls="storage-panel" aria-expanded="false" title="Gerenciar espaço e lixeira">
+  <span aria-hidden="true">▤</span> Espaço
+</button>
+<aside id="storage-panel" hidden aria-label="Armazenamento e lixeira">
+  <div class="storage-heading">
+    <div><strong>Armazenamento</strong><small id="storage-status">Dados locais</small></div>
+    <button id="storage-close" type="button" aria-label="Fechar armazenamento">×</button>
+  </div>
+  <div id="storage-summary">
+    <div><span>Imagens</span><strong id="storage-active-size">—</strong><small id="storage-active-count">—</small></div>
+    <div><span>Miniaturas</span><strong id="storage-cache-size">—</strong><small>Cache recriável</small></div>
+    <div><span>Lixeira</span><strong id="storage-trash-size">—</strong><small>Recuperável</small></div>
+  </div>
+  <div class="storage-section-heading">
+    <div><strong>Limpar por dia</strong><small>Selecione dias para mover à lixeira</small></div>
+    <button id="storage-refresh" type="button" title="Atualizar informações">↻</button>
+  </div>
+  <div id="storage-days" aria-label="Dias e espaço ocupado"></div>
+  <button id="storage-clean" type="button" disabled>Mover dias selecionados à lixeira</button>
+  <div class="storage-section-heading">
+    <div><strong>Lixeira local</strong><small>Restaure ou libere espaço definitivamente</small></div>
+  </div>
+  <div id="storage-trash-list" aria-label="Imagens recuperáveis"></div>
+  <button id="storage-empty" type="button" disabled>Esvaziar lixeira</button>
+</aside>
 <section id="selection-toolbar" hidden aria-label="Operações com imagens selecionadas">
   <span id="selection-count">0 selecionadas</span>
   <span id="selection-hint">Ctrl+Clique · Shift+Clique</span>

@@ -127,3 +127,97 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #12151c; col
 @media (max-width: 650px) {
   #selection-toolbar { top: auto; bottom: 53px; left: 12px; right: 12px; max-width: unset; }
 }
+
+
+/* 0.6 — Espaço ocupado, limpeza por dia e lixeira local. */
+#storage-toggle, #storage-panel { position: fixed; z-index: 22; font-family: inherit; }
+#storage-toggle {
+  top: 12px; right: 12px; display: flex; align-items: center; gap: 9px;
+  background: #222938; color: #e0e9f2; border: 1px solid #405069;
+  border-radius: 10px; box-shadow: 0 6px 22px #0006; padding: 10px 14px;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+}
+#storage-toggle:hover { background: #2b3547; border-color: #5ee0c1; }
+#storage-toggle[aria-expanded="true"] { visibility: hidden; }
+#storage-panel {
+  top: 12px; right: 12px; box-sizing: border-box; display: flex;
+  flex-direction: column; gap: 10px; width: min(365px, calc(100vw - 24px));
+  height: min(730px, calc(100vh - 26px)); max-height: calc(100vh - 26px);
+  padding: 15px; color: #e0e6f1; background: #1b202d;
+  border: 1px solid #374355; border-radius: 14px;
+  box-shadow: 0 16px 52px #000a;
+}
+#storage-panel[hidden] { display: none; }
+.storage-heading, .storage-section-heading {
+  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+}
+.storage-heading > div, .storage-section-heading > div { display: flex; flex-direction: column; gap: 4px; }
+.storage-heading strong { font-size: 16px; }
+.storage-heading small, .storage-section-heading small { color: #8192a8; font-size: 11px; }
+.storage-section-heading { margin-top: 7px; }
+.storage-section-heading strong { font-size: 13px; }
+#storage-close, #storage-refresh {
+  border: 0; background: transparent; color: #a5b4c8;
+  border-radius: 7px; cursor: pointer; padding: 2px 7px;
+  font-size: 22px; line-height: 1;
+}
+#storage-close:hover, #storage-refresh:hover { background: #303c4c; color: #fff; }
+#storage-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+#storage-summary > div {
+  min-width: 0; padding: 11px 9px; display: flex; flex-direction: column;
+  gap: 6px; background: #101824; border: 1px solid #303b4d; border-radius: 9px;
+}
+#storage-summary span, #storage-summary small { color: #8d9aae; font-size: 10px; }
+#storage-summary strong { font-size: 14px; color: #d9f9e9; white-space: nowrap; }
+#storage-days, #storage-trash-list {
+  min-height: 45px; overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: #45526a transparent;
+  border: 1px solid #2d3748; border-radius: 9px;
+  background: #141b26; padding: 5px;
+}
+#storage-days { flex: 1; }
+#storage-trash-list { flex: 0.8; }
+.storage-day {
+  border: 1px solid transparent; background: transparent;
+  color: #dbe5ef; border-radius: 8px; width: 100%;
+  padding: 10px 9px; display: flex; align-items: center; gap: 8px;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.storage-day:hover { background: #273344; }
+.storage-day.is-selected { color: #b3fce5; background: #1f413f; border-color: #478276; }
+.storage-day .storage-day-name { flex: 1; font-size: 12px; font-weight: 600; }
+.storage-day .storage-day-info { color: #94a3b7; font-size: 11px; white-space: nowrap; }
+.storage-tick { font-size: 14px; color: #61768b; }
+.storage-day.is-selected .storage-tick { color: #65e2c1; }
+#storage-clean, #storage-empty {
+  flex: none; width: 100%; border-radius: 8px; border: 1px solid #486155;
+  background: #2a473d; color: #bff9df; padding: 10px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+#storage-clean:disabled, #storage-empty:disabled {
+  cursor: default; background: #232c35; border-color: #35404b; color: #707f91;
+}
+#storage-clean.confirm, #storage-empty.confirm {
+  background: #a14338; border-color: #d77468; color: white;
+}
+.storage-trash-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 7px; border-bottom: 1px solid #2b3645;
+}
+.storage-trash-row:last-child { border-bottom: 0; }
+.storage-trash-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.storage-trash-text strong { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; font-size: 11px; font-weight: 600; }
+.storage-trash-text small { font-size: 10px; color: #8d9aac; }
+.storage-restore {
+  flex: none; color: #b3f9d9; border: 1px solid #456a5f;
+  background: #263c3a; border-radius: 7px; font: inherit;
+  padding: 6px 8px; font-size: 11px; cursor: pointer;
+}
+.storage-restore:hover { background: #335448; }
+.storage-empty-state { color: #8491a6; padding: 12px 7px; font-size: 12px; }
+#selection-toolbar { top: 59px; }
+#storage-toggle:focus-visible, #storage-close:focus-visible,
+#storage-refresh:focus-visible, .storage-day:focus-visible,
+.storage-restore:focus-visible, #storage-clean:focus-visible,
+#storage-empty:focus-visible { outline: 2px solid #5ee0c1; outline-offset: 2px; }
+@media (max-width: 650px) { #selection-toolbar { top: auto; } }

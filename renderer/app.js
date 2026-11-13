@@ -7,6 +7,11 @@ const daysSearch = $('days-search'), daysList = $('days-list'), daysResults = $(
 const daysSummary = $('days-summary'), daysLatest = $('days-latest');
 const selectionToolbar = $('selection-toolbar'), selectionCount = $('selection-count');
 const selectionExport = $('selection-export'), selectionDelete = $('selection-delete'), selectionClear = $('selection-clear');
+const storageToggle = $('storage-toggle'), storagePanel = $('storage-panel'), storageClose = $('storage-close');
+const storageStatus = $('storage-status'), storageDays = $('storage-days'), storageTrashList = $('storage-trash-list');
+const storageActiveSize = $('storage-active-size'), storageActiveCount = $('storage-active-count');
+const storageCacheSize = $('storage-cache-size'), storageTrashSize = $('storage-trash-size');
+const storageClean = $('storage-clean'), storageEmpty = $('storage-empty'), storageRefresh = $('storage-refresh');
 const { worldViewport, intersects } = window.ClipVaultVisibility;
 const { formatDay, filterDays } = window.ClipVaultDateNav;
 const { orderedIds, rangeBetween, dragPositions } = window.ClipVaultSelection;
@@ -22,6 +27,9 @@ const selected = new Set();
 let anchorId = null, multiMode = false, batchBusy = false, deleteArmed = false, deleteTimer;
 let copySeq = 0, feedbackTimer;
 let daysOpen = false, activeDay = null;
+let storageOpen = false, storageBusy = false, storageSnapshotCache = null;
+let storageConfirm = '', storageConfirmTimer = null, storageRefreshTimer = null;
+const storageSelectedDays = new Set();
 const pendingNew = [];
 
 const fmt = day => {
@@ -93,6 +101,7 @@ function renderDayList() {
   }
 }
 function setDaysOpen(open, focusSearch = false) {
+  if (open && storageOpen) setStorageOpen(false);
   daysOpen = Boolean(open);
   daysPanel.hidden = !daysOpen;
   daysToggle.setAttribute('aria-expanded', String(daysOpen));
@@ -124,6 +133,203 @@ daysLatest.onclick = () => {
   daysSearch.value = '';
   jumpToDay(newest.day);
 };
+
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return Math.round(value) + ' B';
+  const sizes = ['KB', 'MB', 'GB', 'TB'];
+  let unit = value / 1024, i = 0;
+  while (unit >= 1024 && i < sizes.length - 1) { unit /= 1024; i++; }
+  return (unit >= 10 ? unit.toFixed(1) : unit.toFixed(2)).replace('.', ',') + ' ' + sizes[i];
+}
+function snapshotPositions(ids) {
+  const snapshot = {};
+  for (const id of ids) {
+    const p = layout[id];
+    if (validLayout(p)) snapshot[id] = { x: p.x, y: p.y, w: p.w };
+  }
+  return snapshot;
+}
+function cancelStorageConfirm() {
+  storageConfirm = '';
+  clearTimeout(storageConfirmTimer);
+  storageClean.classList.remove('confirm');
+  storageEmpty.classList.remove('confirm');
+  storageClean.textContent = 'Mover dias selecionados à lixeira';
+  storageEmpty.textContent = 'Esvaziar lixeira';
+}
+function armStorageAction(which) {
+  if (storageConfirm === which) return true;
+  cancelStorageConfirm();
+  storageConfirm = which;
+  if (which === 'days') {
+    storageClean.textContent = 'Confirmar envio à lixeira?';
+    storageClean.classList.add('confirm');
+  } else {
+    storageEmpty.textContent = 'Confirmar exclusão definitiva?';
+    storageEmpty.classList.add('confirm');
+  }
+  storageConfirmTimer = setTimeout(cancelStorageConfirm, 5000);
+  return false;
+}
+function renderStorage(snapshot) {
+  storageSnapshotCache = snapshot;
+  storageActiveSize.textContent = formatBytes(snapshot.activeBytes);
+  storageActiveCount.textContent = snapshot.activeCount + ' imagens';
+  storageCacheSize.textContent = formatBytes(snapshot.cacheBytes);
+  storageTrashSize.textContent = formatBytes(snapshot.trashBytes);
+  const activeDays = new Set(snapshot.days.map(x => x.day));
+  for (const day of [...storageSelectedDays]) if (!activeDays.has(day)) storageSelectedDays.delete(day);
+  storageDays.textContent = '';
+  if (!snapshot.days.length) {
+    const empty = document.createElement('div');
+    empty.className = 'storage-empty-state';
+    empty.textContent = 'Ainda não há capturas armazenadas.';
+    storageDays.append(empty);
+  }
+  for (const day of snapshot.days) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'storage-day';
+    button.setAttribute('aria-pressed', String(storageSelectedDays.has(day.day)));
+    if (storageSelectedDays.has(day.day)) button.classList.add('is-selected');
+    const tick = document.createElement('span'); tick.className = 'storage-tick';
+    tick.textContent = storageSelectedDays.has(day.day) ? '☑' : '□';
+    const name = document.createElement('span'); name.className = 'storage-day-name';
+    name.textContent = formatDay(day.day);
+    const info = document.createElement('span'); info.className = 'storage-day-info';
+    info.textContent = day.count + ' · ' + formatBytes(day.bytes);
+    button.append(tick, name, info);
+    button.onclick = () => {
+      if (storageBusy) return;
+      if (storageSelectedDays.has(day.day)) storageSelectedDays.delete(day.day);
+      else storageSelectedDays.add(day.day);
+      cancelStorageConfirm();
+      renderStorage(storageSnapshotCache);
+    };
+    storageDays.append(button);
+  }
+  storageClean.disabled = storageBusy || !storageSelectedDays.size;
+  storageTrashList.textContent = '';
+  if (!snapshot.trashItems.length) {
+    const empty = document.createElement('div');
+    empty.className = 'storage-empty-state';
+    empty.textContent = 'Lixeira vazia. Capturas excluídas poderão ser restauradas aqui.';
+    storageTrashList.append(empty);
+  }
+  for (const item of snapshot.trashItems) {
+    const row = document.createElement('div'); row.className = 'storage-trash-row';
+    const labels = document.createElement('div'); labels.className = 'storage-trash-text';
+    const filename = document.createElement('strong');
+    filename.textContent = item.id.split('/').pop();
+    filename.title = item.id;
+    const details = document.createElement('small');
+    details.textContent = formatDay(item.id.split('/')[0]) + ' · ' + formatBytes(item.bytes);
+    labels.append(filename, details);
+    const restore = document.createElement('button'); restore.type = 'button';
+    restore.className = 'storage-restore';
+    restore.textContent = 'Restaurar';
+    restore.disabled = storageBusy;
+    restore.onclick = () => { void restoreStorageItem(item.token); };
+    row.append(labels, restore);
+    storageTrashList.append(row);
+  }
+  storageEmpty.disabled = storageBusy || !snapshot.trashItems.length;
+}
+async function refreshStorage() {
+  if (!storageOpen || storageBusy) return;
+  storageStatus.textContent = 'Calculando espaço...';
+  try {
+    const snapshot = await vault.storageSnapshot();
+    if (!storageOpen) return;
+    renderStorage(snapshot);
+    storageStatus.textContent = snapshot.days.length + ' dias · tudo salvo neste computador';
+  } catch (err) {
+    console.error('[ClipVault] Não foi possível calcular armazenamento:', err);
+    storageStatus.textContent = 'Falha ao consultar armazenamento';
+  }
+}
+function scheduleStorageRefresh() {
+  if (!storageOpen) return;
+  clearTimeout(storageRefreshTimer);
+  storageRefreshTimer = setTimeout(() => { void refreshStorage(); }, 450);
+}
+function setStorageOpen(open) {
+  if (open && daysOpen) setDaysOpen(false);
+  storageOpen = Boolean(open);
+  storagePanel.hidden = !storageOpen;
+  storageToggle.setAttribute('aria-expanded', String(storageOpen));
+  if (!storageOpen) {
+    storageSelectedDays.clear();
+    cancelStorageConfirm();
+    clearTimeout(storageRefreshTimer);
+    return;
+  }
+  select(null); // Mantém só uma barra flutuante por vez.
+  void refreshStorage();
+}
+async function cleanStorageDays() {
+  if (storageBusy || !storageSelectedDays.size) return;
+  if (!armStorageAction('days')) return;
+  const chosen = [...storageSelectedDays];
+  const ids = chosen.flatMap(day => days.get(day)?.items.map(it => it.id) || []);
+  const positions = snapshotPositions(ids);
+  storageBusy = true; cancelStorageConfirm();
+  storageClean.disabled = storageEmpty.disabled = true;
+  try {
+    const result = await vault.trashDays(chosen, positions);
+    const moved = Array.isArray(result?.deleted) ? result.deleted : [];
+    const failed = Array.isArray(result?.failed) ? result.failed : [];
+    forgetItems(moved);
+    storageSelectedDays.clear();
+    showBatchFeedback(moved.length + ' imagens movidas à lixeira' +
+      (failed.length ? ' · ' + failed.length + ' falharam' : ''), Boolean(failed.length));
+  } catch (err) {
+    console.error('[ClipVault] Falha ao limpar dias:', err);
+    showBatchFeedback('Falha ao limpar dias', true);
+  } finally {
+    storageBusy = false;
+    await refreshStorage();
+  }
+}
+async function restoreStorageItem(token) {
+  if (storageBusy) return;
+  storageBusy = true;
+  try {
+    const item = await vault.restoreTrash(token);
+    if (!item || !item.id || !item.w || !item.h) throw new Error('Restauração inválida');
+    if (validLayout(item.layout)) layout[item.id] = item.layout;
+    addBatch([item]);
+    save();
+    showBatchFeedback('Imagem restaurada no canvas');
+  } catch (err) {
+    console.error('[ClipVault] Falha ao restaurar imagem:', err);
+    showBatchFeedback('Não foi possível restaurar a imagem', true);
+  } finally {
+    storageBusy = false;
+    await refreshStorage();
+  }
+}
+async function emptyStorageTrash() {
+  if (storageBusy || !storageSnapshotCache?.trashItems.length) return;
+  if (!armStorageAction('trash')) return;
+  storageBusy = true; cancelStorageConfirm();
+  storageEmpty.disabled = true;
+  try {
+    const result = await vault.emptyTrash();
+    showBatchFeedback(result.removed + ' imagens removidas definitivamente');
+  } catch (err) {
+    console.error('[ClipVault] Falha ao esvaziar lixeira:', err);
+    showBatchFeedback('Falha ao esvaziar a lixeira', true);
+  } finally {
+    storageBusy = false;
+    await refreshStorage();
+  }
+}
+storageToggle.onclick = () => setStorageOpen(true);
+storageClose.onclick = () => { setStorageOpen(false); storageToggle.focus(); };
+storageRefresh.onclick = () => { void refreshStorage(); };
+storageClean.onclick = () => { void cleanStorageDays(); };
+storageEmpty.onclick = () => { void emptyStorageTrash(); };
 
 async function copySelected(id) {
   if (!id) return;
@@ -227,17 +433,16 @@ function makeDay(day) {
     clearTimeout(confirmation);
     button.disabled = true;
     try {
-      await vault.delDay(day);
-      for (const it of D.items) {
-        unmount(it);
-        itemById.delete(it.id);
-        delete layout[it.id];
+      const ids = D.items.map(item => item.id);
+      const result = await vault.delDay(day, snapshotPositions(ids));
+      const moved = Array.isArray(result?.deleted) ? result.deleted : [];
+      forgetItems(moved);
+      if (result?.failed?.length) {
+        showBatchFeedback(moved.length + ' movidas, ' + result.failed.length + ' falharam', true);
+      } else {
+        showBatchFeedback(moved.length + ' imagens movidas à lixeira');
       }
-      discardSelected(D.items.map(item => item.id));
-      D.el.remove();
-      days.delete(day);
-      save();
-      relayout();
+      scheduleStorageRefresh();
     } catch (err) {
       console.error('[ClipVault] Falha ao apagar dia:', err);
       button.disabled = false;
@@ -479,7 +684,7 @@ function forgetItems(ids) {
       days.delete(D.day);
     } else recomputeBottom(D);
   }
-  if (ids.length) { save(); relayout(); }
+  if (ids.length) { save(); relayout(); scheduleStorageRefresh(); }
 }
 async function deleteSelection(ids) {
   if (!ids.length || batchBusy) return;
@@ -487,13 +692,13 @@ async function deleteSelection(ids) {
   batchBusy = true;
   updateSelectionUI();
   try {
-    const result = await vault.deleteMany(ids);
+    const result = await vault.deleteMany(ids, snapshotPositions(ids));
     const completed = Array.isArray(result?.deleted) ? result.deleted : [];
     const failed = Array.isArray(result?.failed) ? result.failed : [];
     forgetItems(completed);
     showBatchFeedback(failed.length
-      ? completed.length + ' apagadas, ' + failed.length + ' falharam'
-      : completed.length + (completed.length === 1 ? ' imagem apagada' : ' imagens apagadas'),
+      ? completed.length + ' movidas à lixeira, ' + failed.length + ' falharam'
+      : completed.length + (completed.length === 1 ? ' imagem movida à lixeira' : ' imagens movidas à lixeira'),
       failed.length > 0);
   } catch (err) {
     console.error('[ClipVault] Erro ao apagar seleção:', err);
@@ -553,6 +758,12 @@ addEventListener('keydown', e => {
     daysToggle.focus();
     return;
   }
+  if (e.key === 'Escape' && storageOpen) {
+    e.preventDefault();
+    setStorageOpen(false);
+    storageToggle.focus();
+    return;
+  }
   if (e.key === 'Escape' && selected.size && !batchBusy) {
     e.preventDefault();
     select(null);
@@ -560,6 +771,7 @@ addEventListener('keydown', e => {
   }
   // Não interfere com texto da pesquisa nem atalhos de botões.
   if (e.target?.closest?.('#days-panel') ||
+      e.target?.closest?.('#storage-panel') ||
       e.target?.closest?.('#selection-toolbar') ||
       e.target?.matches?.('input, textarea, [contenteditable="true"]')) return;
   if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && selected.size) {
@@ -581,6 +793,7 @@ addEventListener('keydown', e => {
 vault.onNew(item => {
   if (!ready) { pendingNew.push(item); return; }
   addBatch([item]);
+  scheduleStorageRefresh();
 });
 vault.onPause(setState);
 vault.load().then(result => {

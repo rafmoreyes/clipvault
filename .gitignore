@@ -26,3 +26,9 @@ build/
 dist/
 *.exe
 *.asar
+
+# Cache e lixeira são exclusivamente locais
+.trash/
+**/.trash/
+.thumbnails/
+**/.thumbnails/

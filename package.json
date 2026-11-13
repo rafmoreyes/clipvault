@@ -1,13 +1,13 @@
 {
   "name": "clipvault",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Clipboard local com canvas infinito e copia de imagens para Windows",
   "main": "main.js",
   "scripts": {
     "prestart": "node scripts/generate-icon.js",
     "start": "electron .",
-    "test": "node tests/smoke.js && node tests/clipboard-out.test.js && node tests/visibility.test.js && node tests/date-nav.test.js && node tests/date-panel.test.js && node tests/multi-select.test.js && node tests/multi-toolbar.test.js && node tests/batch-files.test.js && node tests/thumbnail-cache.test.js && node tests/capture-name.test.js && node scripts/generate-icon.js && node tests/icon.test.js",
+    "test": "node tests/smoke.js && node tests/clipboard-out.test.js && node tests/visibility.test.js && node tests/date-nav.test.js && node tests/date-panel.test.js && node tests/multi-select.test.js && node tests/multi-toolbar.test.js && node tests/batch-files.test.js && node tests/storage-manager.test.js && node tests/storage-panel.test.js && node tests/thumbnail-cache.test.js && node tests/capture-name.test.js && node scripts/generate-icon.js && node tests/icon.test.js",
     "prebuild:win": "node scripts/generate-icon.js",
     "build:win": "electron-builder --win portable --x64 --publish never"
   },
@@ -32,7 +32,8 @@
       "package.json",
       "capture-name.js",
       "thumbnail-cache.js",
-      "batch-files.js"
+      "batch-files.js",
+      "storage-manager.js"
     ],
     "extraResources": [
       {

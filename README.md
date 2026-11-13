@@ -1,4 +1,4 @@
-# ClipVault — Build 0.5.0
+# ClipVault — Build 0.6.0 (seleção múltipla + armazenamento)
 
 Vault de imagens para **Windows 11**, inteiramente local. Captura imagens copiadas para o clipboard e organiza automaticamente em um canvas infinito com um frame por dia.
 
@@ -47,8 +47,8 @@ Para executar o projeto em modo de desenvolvimento, use **npm.cmd start**. Para 
 | Zoom | Roda do mouse |
 | Mover canvas | Arraste o fundo |
 | Retornar ao topo | Home |
-| Apagar imagem do HD | Selecione a imagem e pressione Delete |
-| Apagar um dia | Botão **Apagar dia**, confirmação obrigatória |
+| Enviar imagem à lixeira | Selecione a imagem e pressione Delete |
+| Enviar um dia à lixeira | Botão **Apagar dia**, confirmação obrigatória |
 | Pausar/retomar captura | Ctrl+Alt+P ou menu na bandeja |
 | Encerrar | Menu da bandeja > Sair |
 
@@ -81,7 +81,7 @@ Execute `npm.cmd test` e `npm.cmd run build:win`, copie o novo `dist\\ClipVault.
 1. Imagens antigas e posições preservadas.
 2. Zoom e pan fluidos entre vários dias.
 3. Clique para copiar e Ctrl+V em outro app.
-4. Remoção de imagem e de dia eliminando arquivo original e miniatura.
+4. Envio de imagem e dia à lixeira local, removendo a miniatura e permitindo restaurar o PNG.
 5. O cache `.thumbnails` é criado localmente apenas para imagens visitadas.
 
 **Nota:** os testes automatizados cobrem lógica de viewport e cache, incluindo cenário geométrico com 10.000 imagens; não medem FPS real ou memória no seu Windows. A versão 0.2.1 permanece como baseline anterior para comparação.
@@ -110,7 +110,7 @@ A virtualização e a geração local de miniaturas da versão 0.3 são mantidas
 - Quando o modo de seleção é usado, aparece uma barra discreta com a quantidade de imagens e os botões **Exportar**, **Apagar** e **Limpar seleção**.
 - Arrastar uma imagem já selecionada move todas as selecionadas juntas, preservando o dia e o espaçamento relativo. O movimento não copia nada para o clipboard.
 - **Exportar** abre uma caixa para escolher a pasta e copia os PNGs originais, sem removê-los do Vault nem sobrescrever arquivos preexistentes. Em colisões usa `__02`, `__03` etc. Não é permitido exportar para dentro de `ClipVaultData`.
-- **Apagar** e a tecla **Delete** exigem uma segunda confirmação quando há duas ou mais imagens selecionadas. A exclusão remove os originais do HD e o cache de miniaturas correspondente.
+- **Apagar** e a tecla **Delete** exigem uma segunda confirmação quando há duas ou mais imagens selecionadas. Na 0.5 original essa ação removia os PNGs. Na 0.6 eles são movidos para a lixeira local, com recuperação disponível.
 - **Esc** limpa a seleção; o painel de datas mantém prioridade sobre Esc quando estiver aberto.
 - **Ctrl+C** continua copiando uma única imagem selecionada. Não tenta colocar múltiplos PNGs no clipboard.
 - Há limite de 2.000 imagens por operação em lote; o conteúdo continua **100% local**. Nem o Git, nem o aplicativo enviam capturas para a rede.
@@ -119,3 +119,26 @@ A virtualização e a geração local de miniaturas da versão 0.3 são mantidas
 ### Validação
 
 `npm.cmd test` agora verifica intervalos, deslocamento agrupado, compatibilidade do painel de datas, exportação sem sobrescrever, confirmação de exclusão e o fluxo de clique para copiar. O build Windows permanece `npm.cmd run build:win`. Teste real no Windows é necessário antes de aprovar a nova baseline.
+
+## Build 0.6.0 — Espaço ocupado e lixeira recuperável
+
+- O botão **▤ Espaço** abre um painel recolhível à direita, sem alterar o canvas nem o painel de datas.
+- Exibe a quantidade e o peso das imagens originais por dia, além do espaço usado pelas miniaturas e pela lixeira local.
+- Selecione um ou vários dias no painel para **mover suas imagens à lixeira**. A ação exige confirmação. As datas e quantidades no canvas são atualizadas depois.
+- Excluir uma imagem (Delete), várias imagens (Build 0.5) ou um dia no próprio frame também **move os PNGs para a lixeira**, em vez de apagá-los definitivamente.
+- A lixeira fica em `%USERPROFILE%\ClipVaultData\.trash\`. Cada item é salvo com metadados de data e posição. **Ela persiste após reiniciar o PC.**
+- **Restaurar** devolve o PNG ao dia original e tenta preservar as posições do canvas. Se o arquivo de destino já existir, cria um novo nome com `_restored_01`, `_restored_02` etc., sem sobrescrever.
+- **Esvaziar lixeira** elimina definitivamente os PNGs da lixeira, após confirmação dupla. Nenhuma exclusão automática por tempo é aplicada.
+- As miniaturas em `.thumbnails` continuam sendo cache recriável. O painel as contabiliza separadamente; elas não são versões originais.
+- Tanto as operações de limpeza quanto as de restauração são **100% locais**. Nenhum PNG, ícone ou executável entra no GitHub.
+- O limite da seleção em lote permanece em **2.000 imagens por operação**. A limpeza por dia também respeita esse limite.
+
+### Teste da 0.6 no Windows
+
+1. Abra **▤ Espaço** e confira os totais por data.
+2. Selecione um dia, confirme a limpeza e verifique sua presença na lixeira.
+3. Use **Restaurar** e confira o PNG e sua posição anterior no canvas.
+4. Teste Ctrl+Clique, Shift+Clique, arraste em grupo e Exportar da 0.5.
+5. Teste **Esvaziar lixeira** apenas com imagens descartáveis: essa operação é definitiva.
+
+`npm.cmd test` executa também cenários automatizados de armazenamento, movimentação para a lixeira, colisões de nomes e restauração. O Electron/Windows precisa de validação prática antes da aprovação da build 0.6.

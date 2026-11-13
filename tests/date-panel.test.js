@@ -42,10 +42,14 @@ async function run() {
   const keys = ['root', 'world', 'state', 'copy-feedback',
     'days-toggle', 'days-panel', 'days-close', 'days-search',
     'days-list', 'days-results', 'days-summary', 'days-latest',
-    'selection-toolbar', 'selection-count', 'selection-export', 'selection-delete', 'selection-clear'];
+    'selection-toolbar', 'selection-count', 'selection-export', 'selection-delete', 'selection-clear',
+    'storage-toggle', 'storage-panel', 'storage-close', 'storage-status',
+    'storage-days', 'storage-trash-list', 'storage-active-size', 'storage-active-count',
+    'storage-cache-size', 'storage-trash-size', 'storage-clean', 'storage-empty', 'storage-refresh'];
   const elements = Object.fromEntries(keys.map(key => [key, new FakeElement()]));
   elements['days-panel'].hidden = true;
   elements['selection-toolbar'].hidden = true;
+  elements['storage-panel'].hidden = true;
   const document = {
     getElementById: id => elements[id],
     createElement: tag => new FakeElement(tag)
