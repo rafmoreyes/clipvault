@@ -61,3 +61,7 @@ Fechar a janela não encerra a captura; o app continua na bandeja do Windows. A 
 **Atenção:** um teste de uso real do executável, da bandeja e da colagem em outros aplicativos precisa ser realizado no Windows. Ainda não há miniaturas, limpeza automática ou início com Windows.
 
 A Build 0.1.1 foi aprovada como baseline anterior; a 0.2.0 adiciona somente cópia de imagens e build portátil.
+
+## Nomes de arquivos (Build 0.2.1)
+
+As novas capturas recebem nomes como `13_11_2026_15h30m_01.png`, `13_11_2026_15h30m_02.png`. O último número é sequencial **por minuto**, sem sobrescrever capturas anteriores, mesmo após reiniciar. A organização das pastas por dia (`AAAA-MM-DD`) e os arquivos antigos **não mudam**, preservando as referências em `layout.json`.

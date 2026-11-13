@@ -9,13 +9,17 @@ const pkg = JSON.parse(read('package.json'));
 assert.equal(pkg.main, 'main.js');
 assert.equal(pkg.scripts.start, 'electron .');
 assert.ok(/^\d+\.\d+\.\d+$/.test(pkg.devDependencies.electron));
-for (const p of ['main.js', 'preload.js', 'renderer/app.js', 'clipboard-image.js', 'clipboard-out.js', 'scripts/generate-icon.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
+for (const p of ['main.js', 'preload.js', 'renderer/app.js', 'clipboard-image.js', 'clipboard-out.js', 'capture-name.js', 'scripts/generate-icon.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
 const main = read('main.js');
 const renderer = read('renderer/app.js');
 const preload = read('preload.js');
 const html = read('renderer/index.html');
 const ignore = read('.gitignore');
 assert.match(main, /ClipVaultData/);
+assert.match(main, /saveCapturePng\(dir, d, png\)/);
+assert.ok(pkg.build.files.includes('capture-name.js'));
+assert.ok(pkg.scripts.test.includes('capture-name.test.js'));
+
 assert.match(main, /contextIsolation:\s*true/);
 assert.match(main, /nodeIntegration:\s*false/);
 assert.match(main, /sandbox:\s*true/);

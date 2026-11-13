@@ -3,6 +3,7 @@ const path = require('path'), fs = require('fs'), os = require('os'), crypto = r
 const { pathToFileURL } = require('url');
 const { readClipboardImage } = require('./clipboard-image');
 const { copyVaultImage } = require('./clipboard-out');
+const { saveCapturePng } = require('./capture-name');
 
 // Dados ficam FORA da pasta do projeto (nunca vao pro GitHub)
 const DATA = path.join(os.homedir(), 'ClipVaultData');
@@ -64,11 +65,11 @@ async function tick() {
     if (h === lastHash) return;
     const d = new Date();
     const day = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
-    const name = `${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}${String(d.getMilliseconds()).padStart(3, '0')}-${h.slice(0, 10)}.png`;
     const dir = path.join(DATA, day);
     await fs.promises.mkdir(dir, { recursive: true });
     if (paused || priming || currentGeneration !== generation) return;
-    await fs.promises.writeFile(path.join(dir, name), png, { flag: 'wx' });
+    // dd_mm_aaaa_HHhMMm_NN.png, sem sobrescrever arquivos existentes.
+    const name = await saveCapturePng(dir, d, png);
     lastHash = h;
     if (win && !win.isDestroyed()) win.webContents.send('new-image', { id: `${day}/${name}`, w: width, h: height });
   } catch (err) { console.error('[ClipVault] Falha na captura:', err); }
