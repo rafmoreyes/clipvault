@@ -18,8 +18,16 @@
   <div id="days-list" role="list" aria-label="Dias com capturas"></div>
   <button id="days-latest" type="button">Voltar ao dia mais recente</button>
 </aside>
+<section id="selection-toolbar" hidden aria-label="Operações com imagens selecionadas">
+  <span id="selection-count">0 selecionadas</span>
+  <span id="selection-hint">Ctrl+Clique · Shift+Clique</span>
+  <button id="selection-export" type="button">Exportar</button>
+  <button id="selection-delete" type="button">Apagar</button>
+  <button id="selection-clear" type="button" aria-label="Limpar seleção">×</button>
+</section>
 <div id="hud"><b id="state"></b><span>Clique na imagem para copiar • Ctrl+V em outro app • Ctrl+C: copiar selecionada • Del: apagar • Scroll: zoom • Ctrl+Alt+P: pausar</span><span id="copy-feedback" role="status" aria-live="polite"></span></div>
 <script src="visibility.js"></script>
 <script src="date-nav.js"></script>
+<script src="multi-select.js"></script>
 <script src="app.js"></script>
 </body></html>

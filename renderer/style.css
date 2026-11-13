@@ -95,3 +95,35 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #12151c; col
 @media (max-width: 460px) {
   #days-panel { height: min(500px, calc(100vh - 26px)); }
 }
+
+
+/* ClipVault 0.5 — seleção múltipla: barra só aparece durante a seleção. */
+#selection-toolbar {
+  position: fixed; z-index: 18; top: 12px; right: 12px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  max-width: min(720px, calc(100vw - 110px));
+  padding: 8px 10px; border-radius: 11px;
+  border: 1px solid #426054; background: #1b2831;
+  box-shadow: 0 9px 25px #0009;
+}
+#selection-toolbar[hidden] { display: none; }
+#selection-count { color: #aaf5df; font-weight: 700; font-size: 13px; white-space: nowrap; }
+#selection-hint { font-size: 11px; color: #8193a8; white-space: nowrap; }
+#selection-toolbar button {
+  background: #2b3c4a; border: 1px solid #425b65;
+  color: #e3edf2; border-radius: 7px; padding: 7px 10px;
+  cursor: pointer; font: 12px "Segoe UI", system-ui, sans-serif;
+}
+#selection-toolbar button:hover:not(:disabled) { background: #3c515b; border-color: #5ee0c1; }
+#selection-toolbar button:disabled { opacity: 0.5; cursor: default; }
+#selection-delete { color: #ffb6ae !important; }
+#selection-delete.confirm { color: white !important; background: #a63c36; border-color: #e56c63; }
+#selection-clear { font-size: 19px !important; padding: 3px 9px !important; line-height: 1.1; }
+#selection-toolbar button:focus-visible { outline: 2px solid #5ee0c1; outline-offset: 2px; }
+.it.sel { outline: 4px solid #5ee0c1; outline-offset: 2px; }
+@media (max-width: 930px) {
+  #selection-hint { display: none; }
+}
+@media (max-width: 650px) {
+  #selection-toolbar { top: auto; bottom: 53px; left: 12px; right: 12px; max-width: unset; }
+}

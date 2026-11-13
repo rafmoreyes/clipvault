@@ -1,10 +1,11 @@
-const { app, BrowserWindow, Tray, Menu, clipboard, ClipboardItem, nativeImage, protocol, net, ipcMain, session, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, dialog, clipboard, ClipboardItem, nativeImage, protocol, net, ipcMain, session, globalShortcut } = require('electron');
 const path = require('path'), fs = require('fs'), os = require('os'), crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { readClipboardImage } = require('./clipboard-image');
 const { copyVaultImage } = require('./clipboard-out');
 const { saveCapturePng } = require('./capture-name');
 const { getThumbnailPath, removeThumbnail } = require('./thumbnail-cache');
+const { validatedIds, exportImages, deleteImages } = require('./batch-files');
 
 // Dados ficam FORA da pasta do projeto (nunca vao pro GitHub)
 const DATA = path.join(os.homedir(), 'ClipVaultData');
@@ -154,6 +155,26 @@ ipcMain.handle('saveLayout', (e, l) => {
   if (!fromUI(e) || !l || typeof l !== 'object' || Array.isArray(l)) return;
   fs.writeFileSync(LAYOUT + '.tmp', JSON.stringify(l)); fs.renameSync(LAYOUT + '.tmp', LAYOUT);
 });
+// A UI só envia IDs validados; apenas o usuário escolhe uma pasta de exportação.
+// Nenhuma imagem é transmitida a serviços externos ou incluída no Git.
+ipcMain.handle('exportMany', async (e, ids) => {
+  if (!fromUI(e)) throw new Error('Origem não autorizada');
+  const selected = validatedIds(ids);
+  const choice = await dialog.showOpenDialog(win, {
+    title: 'Exportar imagens selecionadas',
+    buttonLabel: 'Exportar',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (choice.canceled || !choice.filePaths?.length) {
+    return { exported: 0, failed: [], cancelled: true };
+  }
+  return exportImages(DATA, choice.filePaths[0], selected);
+});
+ipcMain.handle('deleteMany', (e, ids) => {
+  if (!fromUI(e)) throw new Error('Origem não autorizada');
+  return deleteImages(DATA, ids, removeThumbnail);
+});
+
 ipcMain.handle('del', async (e, ids) => {
   if (!fromUI(e) || !Array.isArray(ids)) return;
   for (const id of ids) {

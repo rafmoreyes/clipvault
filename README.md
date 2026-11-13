@@ -1,4 +1,4 @@
-# ClipVault — Build 0.4.0
+# ClipVault — Build 0.5.0
 
 Vault de imagens para **Windows 11**, inteiramente local. Captura imagens copiadas para o clipboard e organiza automaticamente em um canvas infinito com um frame por dia.
 
@@ -102,3 +102,20 @@ Execute `npm.cmd test` e `npm.cmd run build:win`, copie o novo `dist\\ClipVault.
 `npm.cmd test` inclui testes de formatação, filtros e uma simulação de UI com vários dias. O empacotamento Windows continua em `npm.cmd run build:win` e o executável portátil em `dist\ClipVault.exe`.
 
 A virtualização e a geração local de miniaturas da versão 0.3 são mantidas. Teste prático com arquivos reais no Windows ainda é necessário antes de marcar esta build como baseline estável.
+
+## Build 0.5.0 — Seleção Múltipla
+
+- Clique normal **continua copiando** uma imagem para o clipboard, sem mostrar uma nova barra de ferramentas.
+- **Ctrl+Clique** alterna imagens na seleção; **Shift+Clique** adiciona um intervalo a partir da última imagem-âncora, inclusive entre dias.
+- Quando o modo de seleção é usado, aparece uma barra discreta com a quantidade de imagens e os botões **Exportar**, **Apagar** e **Limpar seleção**.
+- Arrastar uma imagem já selecionada move todas as selecionadas juntas, preservando o dia e o espaçamento relativo. O movimento não copia nada para o clipboard.
+- **Exportar** abre uma caixa para escolher a pasta e copia os PNGs originais, sem removê-los do Vault nem sobrescrever arquivos preexistentes. Em colisões usa `__02`, `__03` etc. Não é permitido exportar para dentro de `ClipVaultData`.
+- **Apagar** e a tecla **Delete** exigem uma segunda confirmação quando há duas ou mais imagens selecionadas. A exclusão remove os originais do HD e o cache de miniaturas correspondente.
+- **Esc** limpa a seleção; o painel de datas mantém prioridade sobre Esc quando estiver aberto.
+- **Ctrl+C** continua copiando uma única imagem selecionada. Não tenta colocar múltiplos PNGs no clipboard.
+- Há limite de 2.000 imagens por operação em lote; o conteúdo continua **100% local**. Nem o Git, nem o aplicativo enviam capturas para a rede.
+- A função de seleção convive com a virtualização de miniaturas da Build 0.3: imagens fora da tela permanecem selecionadas.
+
+### Validação
+
+`npm.cmd test` agora verifica intervalos, deslocamento agrupado, compatibilidade do painel de datas, exportação sem sobrescrever, confirmação de exclusão e o fluxo de clique para copiar. O build Windows permanece `npm.cmd run build:win`. Teste real no Windows é necessário antes de aprovar a nova baseline.

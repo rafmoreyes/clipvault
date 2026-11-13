@@ -5,8 +5,11 @@ const root = $('root'), world = $('world'), state = $('state'), feedback = $('co
 const daysToggle = $('days-toggle'), daysPanel = $('days-panel'), daysClose = $('days-close');
 const daysSearch = $('days-search'), daysList = $('days-list'), daysResults = $('days-results');
 const daysSummary = $('days-summary'), daysLatest = $('days-latest');
+const selectionToolbar = $('selection-toolbar'), selectionCount = $('selection-count');
+const selectionExport = $('selection-export'), selectionDelete = $('selection-delete'), selectionClear = $('selection-clear');
 const { worldViewport, intersects } = window.ClipVaultVisibility;
 const { formatDay, filterDays } = window.ClipVaultDateNav;
+const { orderedIds, rangeBetween, dragPositions } = window.ClipVaultSelection;
 
 const MES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const HEAD = 90, CELL = 320, GAP = 24, COLS = 5;
@@ -15,6 +18,8 @@ const THUMB_SIZE = 512;
 const days = new Map(), itemById = new Map();
 let layout = {}, view = { x: 60, y: 60, k: 0.5 };
 let sel = null, saveTimer, visibleFrame = 0, ready = false, positionChanged = false;
+const selected = new Set();
+let anchorId = null, multiMode = false, batchBusy = false, deleteArmed = false, deleteTimer;
 let copySeq = 0, feedbackTimer;
 let daysOpen = false, activeDay = null;
 const pendingNew = [];
@@ -140,10 +145,61 @@ async function copySelected(id) {
     if (request === copySeq) feedback.textContent = '';
   }, 5000);
 }
+function cancelDeleteConfirm() {
+  deleteArmed = false;
+  clearTimeout(deleteTimer);
+  selectionDelete.textContent = 'Apagar';
+  selectionDelete.classList.remove('confirm');
+}
+function updateSelectionUI() {
+  selectionToolbar.hidden = !multiMode || !selected.size;
+  selectionCount.textContent = selected.size + (selected.size === 1 ? ' selecionada' : ' selecionadas');
+  selectionExport.disabled = batchBusy || !selected.size;
+  selectionDelete.disabled = batchBusy || !selected.size;
+  selectionClear.disabled = batchBusy;
+}
+function changeSelection(next, primary, anchor, toolsVisible) {
+  for (const id of selected) if (!next.has(id)) itemById.get(id)?.el?.classList.remove('sel');
+  for (const id of next) if (!selected.has(id)) itemById.get(id)?.el?.classList.add('sel');
+  selected.clear();
+  for (const id of next) if (itemById.has(id)) selected.add(id);
+  sel = selected.has(primary) ? primary : [...selected].at(-1) || null;
+  anchorId = selected.has(anchor) ? anchor : sel;
+  multiMode = Boolean(toolsVisible && selected.size);
+  cancelDeleteConfirm();
+  updateSelectionUI();
+}
 function select(id) {
-  if (sel && itemById.get(sel)?.el) itemById.get(sel).el.classList.remove('sel');
-  sel = id;
-  if (sel && itemById.get(sel)?.el) itemById.get(sel).el.classList.add('sel');
+  changeSelection(id && itemById.has(id) ? new Set([id]) : new Set(),
+    id, id, false);
+}
+function selectModified(id, shift) {
+  if (!itemById.has(id)) return;
+  const next = new Set(selected);
+  if (shift) {
+    const start = anchorId && itemById.has(anchorId) ? anchorId : sel || id;
+    for (const chosen of rangeBetween(orderedIds(days), start, id)) next.add(chosen);
+    changeSelection(next, id, start, true);
+  } else {
+    if (next.has(id)) next.delete(id); else next.add(id);
+    changeSelection(next, id, id, true);
+  }
+}
+function discardSelected(ids) {
+  if (!ids.length) return;
+  const removed = new Set(ids), next = new Set([...selected].filter(id => !removed.has(id)));
+  const primary = !removed.has(sel) ? sel : [...next].at(-1) || null;
+  const anchor = !removed.has(anchorId) ? anchorId : primary;
+  changeSelection(next, primary, anchor, multiMode);
+}
+function showBatchFeedback(message, isError = false) {
+  const number = ++copySeq;
+  clearTimeout(feedbackTimer);
+  feedback.textContent = message;
+  if (isError) feedback.classList.add('error'); else feedback.classList.remove('error');
+  feedbackTimer = setTimeout(() => {
+    if (number === copySeq) feedback.textContent = '';
+  }, 5500);
 }
 function validLayout(position) {
   return position && Number.isFinite(position.x) && Number.isFinite(position.y) &&
@@ -177,7 +233,7 @@ function makeDay(day) {
         itemById.delete(it.id);
         delete layout[it.id];
       }
-      if (sel && sel.startsWith(day + '/')) sel = null;
+      discardSelected(D.items.map(item => item.id));
       D.el.remove();
       days.delete(day);
       save();
@@ -247,45 +303,56 @@ function bindDrag(it) {
   img.onpointerdown = e => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    select(it.id);
-    img.setPointerCapture(e.pointerId);
-    const p = layout[it.id], sx = e.clientX, sy = e.clientY, ox = p.x, oy = p.y;
+    if (batchBusy) return;
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      e.preventDefault();
+      selectModified(it.id, e.shiftKey);
+      return; // Nunca copia uma imagem com Ctrl/Shift+Clique.
+    }
+    // Clicar numa imagem já selecionada permite mover todo o grupo.
+    if (!selected.has(it.id)) select(it.id);
+    const group = [...selected].map(id => itemById.get(id)).filter(Boolean);
+    const origins = group.map(item => ({
+      id: item.id, x: layout[item.id].x, y: layout[item.id].y
+    }));
+    const sx = e.clientX, sy = e.clientY;
     let moved = false;
-    it.dragging = true;
+    img.setPointerCapture(e.pointerId);
+    for (const item of group) item.dragging = true;
     img.onpointermove = m => {
       const dx = m.clientX - sx, dy = m.clientY - sy;
       if (!moved && Math.hypot(dx, dy) <= 5) return;
       moved = true;
-      p.x = Math.max(0, Math.round(ox + dx / view.k));
-      p.y = Math.max(0, Math.round(oy + dy / view.k));
-      place(it);
-      if (p.y + hOf(it) > it.D.bottom) {
-        it.D.bottom = p.y + hOf(it);
-        relayout();
+      const next = dragPositions(origins, dx / view.k, dy / view.k);
+      let grows = false;
+      for (const pos of next) {
+        const item = itemById.get(pos.id);
+        if (!item) continue;
+        const p = layout[item.id];
+        p.x = pos.x; p.y = pos.y;
+        place(item);
+        if (p.y + hOf(item) > item.D.bottom) {
+          item.D.bottom = p.y + hOf(item);
+          grows = true;
+        }
       }
+      if (grows) relayout();
     };
-    const cleanup = () => {
-      it.dragging = false;
+    const finish = cancelled => {
       img.onpointermove = img.onpointerup = img.onpointercancel = null;
-    };
-    img.onpointerup = () => {
-      cleanup();
+      for (const item of group) item.dragging = false;
       if (moved) {
-        recomputeBottom(it.D);
+        for (const day of new Set(group.map(item => item.D))) recomputeBottom(day);
         relayout();
         save();
-      } else void copySelected(it.id);
-      scheduleVisible();
-    };
-    img.onpointercancel = () => {
-      cleanup();
-      if (moved) {
-        recomputeBottom(it.D);
-        relayout();
-        save();
+      } else if (!cancelled) {
+        select(it.id);
+        void copySelected(it.id);
       }
       scheduleVisible();
     };
+    img.onpointerup = () => finish(false);
+    img.onpointercancel = () => finish(true);
   };
 }
 function mount(it) {
@@ -309,7 +376,7 @@ function mount(it) {
   place(it);
   bindDrag(it);
   it.D.el.append(img);
-  if (sel === it.id) img.classList.add('sel');
+  if (selected.has(it.id)) img.classList.add('sel');
   assignSource(it);
 }
 function unmount(it) {
@@ -393,25 +460,85 @@ root.addEventListener('wheel', e => {
 }, { passive: false });
 window.addEventListener('resize', scheduleVisible);
 
-async function deleteSelected() {
-  if (!sel) return;
-  const id = sel, it = itemById.get(id);
-  if (!it) return;
-  try {
-    await vault.del([id]);
-    unmount(it);
-    it.D.items.splice(it.D.items.indexOf(it), 1);
+function forgetItems(ids) {
+  const affectedDays = new Set();
+  for (const id of ids) {
+    const item = itemById.get(id);
+    if (!item) continue;
+    unmount(item);
+    const index = item.D.items.indexOf(item);
+    if (index >= 0) item.D.items.splice(index, 1);
+    affectedDays.add(item.D);
     itemById.delete(id);
     delete layout[id];
-    sel = null;
-    if (!it.D.items.length) {
-      it.D.el.remove();
-      days.delete(it.D.day);
-    } else recomputeBottom(it.D);
-    save();
-    relayout();
-  } catch (err) { console.error('[ClipVault] Falha ao excluir imagem:', err); }
+  }
+  discardSelected(ids);
+  for (const D of affectedDays) {
+    if (D.items.length === 0) {
+      D.el.remove();
+      days.delete(D.day);
+    } else recomputeBottom(D);
+  }
+  if (ids.length) { save(); relayout(); }
 }
+async function deleteSelection(ids) {
+  if (!ids.length || batchBusy) return;
+  cancelDeleteConfirm();
+  batchBusy = true;
+  updateSelectionUI();
+  try {
+    const result = await vault.deleteMany(ids);
+    const completed = Array.isArray(result?.deleted) ? result.deleted : [];
+    const failed = Array.isArray(result?.failed) ? result.failed : [];
+    forgetItems(completed);
+    showBatchFeedback(failed.length
+      ? completed.length + ' apagadas, ' + failed.length + ' falharam'
+      : completed.length + (completed.length === 1 ? ' imagem apagada' : ' imagens apagadas'),
+      failed.length > 0);
+  } catch (err) {
+    console.error('[ClipVault] Erro ao apagar seleção:', err);
+    showBatchFeedback('Falha ao apagar imagens', true);
+  } finally {
+    batchBusy = false;
+    updateSelectionUI();
+  }
+}
+function requestDelete() {
+  if (!selected.size || batchBusy) return;
+  if (selected.size > 1 && !deleteArmed) {
+    deleteArmed = true;
+    selectionDelete.textContent = 'Confirmar exclusão?';
+    selectionDelete.classList.add('confirm');
+    deleteTimer = setTimeout(cancelDeleteConfirm, 5000);
+    return;
+  }
+  void deleteSelection([...selected]);
+}
+async function exportSelection() {
+  if (!selected.size || batchBusy) return;
+  batchBusy = true;
+  updateSelectionUI();
+  try {
+    const result = await vault.exportMany([...selected]);
+    if (result?.cancelled) return;
+    const failed = Array.isArray(result?.failed) ? result.failed.length : 0;
+    const exported = Number(result?.exported) || 0;
+    showBatchFeedback(failed
+      ? exported + ' exportadas, ' + failed + ' falharam'
+      : exported + (exported === 1 ? ' imagem exportada' : ' imagens exportadas'),
+      failed > 0);
+  } catch (err) {
+    console.error('[ClipVault] Erro ao exportar seleção:', err);
+    showBatchFeedback('Falha ao exportar. Escolha uma pasta fora de ClipVaultData.', true);
+  } finally {
+    batchBusy = false;
+    updateSelectionUI();
+  }
+}
+selectionDelete.onclick = requestDelete;
+selectionExport.onclick = () => { void exportSelection(); };
+selectionClear.onclick = () => select(null);
+
 addEventListener('keydown', e => {
   const key = e.key.toLowerCase();
   if (e.ctrlKey && !e.altKey && !e.shiftKey && key === 'f') {
@@ -426,19 +553,29 @@ addEventListener('keydown', e => {
     daysToggle.focus();
     return;
   }
-  // Não rouba Ctrl+C, Delete nem Home enquanto o usuário busca uma data.
-  if (e.target?.closest?.('#days-panel') ||
-      e.target?.matches?.('input, textarea, [contenteditable="true"]')) return;
-  if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && sel) {
+  if (e.key === 'Escape' && selected.size && !batchBusy) {
     e.preventDefault();
-    if (!e.repeat) void copySelected(sel);
+    select(null);
+    return;
+  }
+  // Não interfere com texto da pesquisa nem atalhos de botões.
+  if (e.target?.closest?.('#days-panel') ||
+      e.target?.closest?.('#selection-toolbar') ||
+      e.target?.matches?.('input, textarea, [contenteditable="true"]')) return;
+  if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && selected.size) {
+    e.preventDefault();
+    if (!e.repeat && selected.size === 1) void copySelected(sel);
+    else if (!e.repeat) showBatchFeedback('Ctrl+C copia uma imagem por vez');
     return;
   }
   if (e.key === 'Home') {
     view = { x: 60, y: 60, k: 0.5 };
     apply();
   }
-  if (e.key === 'Delete' && !e.repeat) void deleteSelected();
+  if (e.key === 'Delete' && !e.repeat) {
+    e.preventDefault();
+    requestDelete();
+  }
 });
 
 vault.onNew(item => {

@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const { worldViewport, intersects } = require('../renderer/visibility');
 const dates = require('../renderer/date-nav');
+const selection = require('../renderer/multi-select');
 
 class FakeElement {
   constructor(tag = 'div') {
@@ -40,9 +41,11 @@ class FakeElement {
 async function run() {
   const keys = ['root', 'world', 'state', 'copy-feedback',
     'days-toggle', 'days-panel', 'days-close', 'days-search',
-    'days-list', 'days-results', 'days-summary', 'days-latest'];
+    'days-list', 'days-results', 'days-summary', 'days-latest',
+    'selection-toolbar', 'selection-count', 'selection-export', 'selection-delete', 'selection-clear'];
   const elements = Object.fromEntries(keys.map(key => [key, new FakeElement()]));
   elements['days-panel'].hidden = true;
+  elements['selection-toolbar'].hidden = true;
   const document = {
     getElementById: id => elements[id],
     createElement: tag => new FakeElement(tag)
@@ -62,13 +65,16 @@ async function run() {
     saveLayout: async () => {},
     del: async ids => { log.push(ids); },
     delDay: async () => {},
-    copyImage: async () => {}
+    copyImage: async () => {},
+    deleteMany: async () => ({ deleted: [], failed: [] }),
+    exportMany: async () => ({ exported: 0, failed: [], cancelled: true })
   };
   const script = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'app.js'), 'utf8');
   vm.runInNewContext(script, {
     document, window: {
       ClipVaultVisibility: { worldViewport, intersects },
       ClipVaultDateNav: dates,
+      ClipVaultSelection: selection,
       innerWidth: 1400, innerHeight: 900,
       addEventListener() {}
     },

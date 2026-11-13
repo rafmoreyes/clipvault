@@ -9,7 +9,7 @@ const pkg = JSON.parse(read('package.json'));
 assert.equal(pkg.main, 'main.js');
 assert.equal(pkg.scripts.start, 'electron .');
 assert.ok(/^\d+\.\d+\.\d+$/.test(pkg.devDependencies.electron));
-for (const p of ['main.js', 'preload.js', 'renderer/app.js', 'clipboard-image.js', 'clipboard-out.js', 'capture-name.js', 'thumbnail-cache.js', 'renderer/visibility.js', 'renderer/date-nav.js', 'scripts/generate-icon.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
+for (const p of ['main.js', 'preload.js', 'renderer/app.js', 'clipboard-image.js', 'clipboard-out.js', 'capture-name.js', 'thumbnail-cache.js', 'batch-files.js', 'renderer/visibility.js', 'renderer/date-nav.js', 'renderer/multi-select.js', 'scripts/generate-icon.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
 const main = read('main.js');
 const renderer = read('renderer/app.js');
 const preload = read('preload.js');
@@ -25,6 +25,18 @@ assert.match(renderer, /vault:\/\/thumb\//);
 assert.match(renderer, /function mount\(it\)/);
 assert.match(renderer, /function unmount\(it\)/);
 assert.match(renderer, /function refreshVisible\(\)/);
+assert.match(renderer, /function selectModified\(id, shift\)/);
+assert.match(renderer, /function exportSelection\(\)/);
+assert.match(renderer, /function deleteSelection\(ids\)/);
+assert.match(renderer, /dragPositions\(origins, dx \/ view.k, dy \/ view.k\)/);
+assert.match(main, /ipcMain\.handle\('exportMany'/);
+assert.match(main, /ipcMain\.handle\('deleteMany'/);
+assert.match(preload, /exportMany: ids => ipcRenderer\.invoke\('exportMany', ids\)/);
+assert.match(preload, /deleteMany: ids => ipcRenderer\.invoke\('deleteMany', ids\)/);
+assert.match(html, /id="selection-toolbar"/);
+assert.match(html, /src="multi-select\.js"/);
+assert.ok(pkg.build.files.includes('batch-files.js'));
+assert.ok(pkg.scripts.test.includes('multi-toolbar.test.js'));
 assert.match(renderer, /function jumpToDay\(day\)/);
 assert.match(renderer, /daysSearch\.oninput = renderDayList/);
 assert.match(renderer, /setDaysOpen\(true, true\)/);
