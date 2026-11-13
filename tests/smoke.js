@@ -39,6 +39,10 @@ assert.match(renderer, /function createNamedFrame\(\)/);
 assert.match(renderer, /function updateNamedFrames\(\)/);
 assert.match(renderer, /function setToolMode\(next\)/);
 assert.match(renderer, /root\.addEventListener\('contextmenu'/);
+assert.match(renderer, /Pan é SEMPRE RMB/);
+assert.match(renderer, /if \(toolMode !== 'select'\)/);
+assert.match(renderer, /img\.setAttribute\('data-clipvault-id', it\.id\)/);
+
 assert.match(html, /id="tool-pan"/);
 assert.match(html, /id="tool-select"/);
 assert.match(html, /id="marquee-box"/);

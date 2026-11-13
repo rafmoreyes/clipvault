@@ -6,8 +6,8 @@
 <div id="root"><div id="world"></div></div>
 <div id="marquee-box" hidden aria-hidden="true"></div>
 <div id="mode-control" role="group" aria-label="Ferramenta do canvas">
-  <button id="tool-pan" type="button" class="is-active" aria-pressed="true" title="Pan com botão direito">Pan</button>
-  <button id="tool-select" type="button" aria-pressed="false" title="Seleção retangular com botão direito (S)">Select</button>
+  <button id="tool-pan" type="button" class="is-active" aria-pressed="true" title="Modo normal: botão esquerdo copia/arrasta imagens. Botão direito sempre faz Pan">Pan</button>
+  <button id="tool-select" type="button" aria-pressed="false" title="Seleção retangular com botão esquerdo (S). Botão direito continua fazendo Pan">Select</button>
 </div>
 <button id="days-toggle" type="button" aria-controls="days-panel" aria-expanded="false" title="Navegar por datas (Ctrl+F)">
   <span aria-hidden="true">▦</span> Dias
@@ -55,7 +55,7 @@
   <button id="selection-delete" type="button">Apagar</button>
   <button id="selection-clear" type="button" aria-label="Limpar seleção">×</button>
 </section>
-<div id="hud"><b id="state"></b><span>RMB: Pan/Select • S: alternar ferramenta • F: frame • Ctrl+V: colar • Del: lixeira • Scroll: zoom • Ctrl+Alt+P: pausar</span><span id="copy-feedback" role="status" aria-live="polite"></span></div>
+<div id="hud"><b id="state"></b><span>RMB: Pan sempre • LMB em Select: seleção • S: alternar ferramenta • F: frame • Ctrl+V: colar • Del: lixeira • Scroll: zoom • Ctrl+Alt+P: pausar</span><span id="copy-feedback" role="status" aria-live="polite"></span></div>
 <script src="visibility.js"></script>
 <script src="date-nav.js"></script>
 <script src="multi-select.js"></script>

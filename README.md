@@ -1,4 +1,4 @@
-# ClipVault — Build 0.7.0 (Pan/Select + frames nomeáveis)
+# ClipVault — Build 0.7.1 (Pan RMB / Select LMB)
 
 Vault de imagens para **Windows 11**, inteiramente local. Captura imagens copiadas para o clipboard e organiza automaticamente em um canvas infinito com um frame por dia.
 
@@ -45,7 +45,7 @@ Para executar o projeto em modo de desenvolvimento, use **npm.cmd start**. Para 
 | Colar em outro aplicativo | Ctrl+V no aplicativo de destino |
 | Arrastar imagem | Arraste com botão esquerdo |
 | Zoom | Roda do mouse |
-| Ativar seleção retangular | Botão **Select** ou `S`, depois arraste com botão direito |
+| Ativar seleção retangular | Botão **Select** ou `S`, depois arraste com botão esquerdo |
 | Voltar ao modo Pan | Botão **Pan** ou `S` |
 | Criar frame nomeado | Selecione imagens e pressione `F`; digite nome e pressione Enter |
 | Mover canvas | No modo Pan, arraste com o botão direito |
@@ -161,18 +161,29 @@ Teste real no Windows ainda é necessário antes de aprovar esta hotfix como bas
 ## Build 0.7.0 — Pan/Select e frames com nome
 
 - Na barra superior aparecem os modos **Pan** e **Select**. O aplicativo inicia em **Pan**, preservando o clique esquerdo em imagens para copiar ou arrastar.
-- **Botão direito arrastado em Pan:** move o canvas. O botão esquerdo em área vazia não move mais a câmera; apenas limpa a seleção.
-- **Botão direito arrastado em Select:** desenha um retângulo de seleção. Imagens tocadas pelo retângulo são selecionadas, inclusive se estiverem virtualizadas/fora do DOM. `Ctrl` ou `Shift` com o botão direito adiciona à seleção existente.
+- **Botão direito arrastado (em qualquer modo):** move o canvas. No modo normal, o botão esquerdo no fundo apenas limpa a seleção; em Select, desenha o retângulo.
+- **Botão esquerdo arrastado em Select:** desenha um retângulo de seleção. Imagens tocadas pelo retângulo são selecionadas, inclusive se estiverem virtualizadas/fora do DOM. `Ctrl` ou `Shift` com o botão esquerdo adiciona à seleção existente.
 - **S** alterna Pan e Select. Ctrl+Clique e Shift+Clique sobre imagens continuam funcionando.
 - **F**, com uma ou várias imagens selecionadas, cria um **frame visual nomeável** ao redor dessas imagens. O nome é editado imediatamente: digite e pressione Enter. Clique no nome para renomear depois.
 - O `×` no cabeçalho remove somente o frame visual — não exclui nenhum PNG.
 - O frame acompanha a posição das imagens; pode conter referências de datas diferentes, sem alterar a organização por dia nem o clipboard.
 - Os frames ficam em `%USERPROFILE%\ClipVaultData\frames.json`. `layout.json` e os PNGs originais não são alterados por criar ou renomear frames.
-- **Importante:** Pan e seleção com o mesmo botão exigem um modo explícito para distinguir os gestos. Ambos usam RMB, mas somente um fica ativo por vez.
+- **Importante:** Pan é sempre RMB, em qualquer modo. A seleção por retângulo usa LMB quando a ferramenta Select está ativa.
 - O protocolo `vault://app` não ganhou nenhum script novo. O teste de autorização de scripts da 0.6.1 permanece, para evitar a regressão de captura.
 
 ### Verificações
 
-Os testes automatizados incluem simulação de Pan RMB, seleção por retângulo RMB, criação/renomeação/remoção de frame, persistência de `frames.json`, captura-cópia tradicional e regressões de datas, lixeira e seleção múltipla.
+Os testes automatizados incluem simulação de Pan RMB, seleção por retângulo LMB, criação/renomeação/remoção de frame, persistência de `frames.json`, captura-cópia tradicional e regressões de datas, lixeira e seleção múltipla.
 
 Teste a 0.7 no seu Windows antes de marcá-la como baseline. Encerre o executável pela bandeja, faça `git pull`, `npm.cmd test`, `npm.cmd run build:win` e abra `dist\ClipVault.exe`.
+
+## Hotfix 0.7.1 — Mapeamento de botões corrigido
+
+- **RMB (botão direito) faz Pan SEMPRE**, tanto no modo normal quanto em Select.
+- **LMB (botão esquerdo) desenha seleção retangular em Select**, inclusive iniciando o gesto sobre uma imagem.
+- No modo normal/Pan, LMB sobre imagens continua copiando com clique ou movendo com arraste.
+- Em Select, LMB sem arraste sobre uma imagem a seleciona sem copiar. Ctrl/Shift com LMB continuam adicionando à seleção.
+- **S** alterna o comportamento do botão esquerdo entre edição normal e Select; não altera RMB.
+- **F** cria frame nomeável da seleção, como na 0.7.0.
+- Nenhuma alteração na captura, armazenamento, lixeira, formatos PNG ou protocolo de assets.
+- O teste de integração cobre RMB Pan no modo Select, seleção LMB iniciando sobre imagem, ausência de cópia acidental e preservação do frame.

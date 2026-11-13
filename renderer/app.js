@@ -667,7 +667,9 @@ function assignSource(it) {
 function bindDrag(it) {
   const img = it.el;
   img.onpointerdown = e => {
-    if (e.button !== 0) return;
+    // Select usa o botão esquerdo e precisa receber o gesto no canvas,
+    // inclusive quando ele começa em cima de uma imagem.
+    if (e.button !== 0 || toolMode === 'select') return;
     e.stopPropagation();
     if (batchBusy) return;
     if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -728,6 +730,7 @@ function mount(it) {
   img.className = 'it';
   img.draggable = false;
   img.decoding = 'async';
+  img.setAttribute('data-clipvault-id', it.id);
   img.alt = '';
   it.el = img;
   it.D.mounted.add(it);
@@ -822,18 +825,12 @@ function itemRects() {
   });
 }
 root.onpointerdown = e => {
-  if (e.button === 0) {
-    // Pan migrou para RMB. Clique no fundo agora apenas limpa a seleção.
-    select(null);
-    return;
-  }
-  if (e.button !== 2 || batchBusy || storageBusy) return;
-  e.preventDefault();
-  root.setPointerCapture(e.pointerId);
-  const sx = e.clientX, sy = e.clientY;
-  if (toolMode === 'pan') {
+  // Pan é SEMPRE RMB, seja qual for a ferramenta esquerda selecionada.
+  if (e.button === 2) {
+    e.preventDefault();
+    root.setPointerCapture(e.pointerId);
     root.classList.add('pan');
-    let lx = sx, ly = sy;
+    let lx = e.clientX, ly = e.clientY;
     root.onpointermove = m => {
       view.x += m.clientX - lx;
       view.y += m.clientY - ly;
@@ -849,8 +846,20 @@ root.onpointerdown = e => {
     return;
   }
 
-  // Select mode: RMB desenha retângulo em coordenadas de tela; o teste de
-  // interseção usa coordenadas do mundo e funciona mesmo com itens virtualizados.
+  if (batchBusy || storageBusy) return;
+  if (e.button !== 0) return;
+  if (toolMode !== 'select') {
+    // Sem Select, LMB em área vazia limpa a seleção.
+    select(null);
+    return;
+  }
+
+  // Select é SEMPRE LMB. Os eventos que começam sobre imagens chegam
+  // aqui porque bindDrag não os intercepta durante o modo Select.
+  e.preventDefault();
+  root.setPointerCapture(e.pointerId);
+  const sx = e.clientX, sy = e.clientY;
+  const clickedId = e.target?.getAttribute?.('data-clipvault-id');
   let moved = false, ex = sx, ey = sy;
   const selectedBefore = new Set(selected);
   marqueeBox.hidden = true;
@@ -859,9 +868,11 @@ root.onpointerdown = e => {
     if (!moved && Math.hypot(ex - sx, ey - sy) < 4) return;
     moved = true;
     const rect = rectFromPoints(sx, sy, ex, ey);
-    Object.assign(marqueeBox.style, { left: rect.left + 'px',
-      top: rect.top + 'px', width: (rect.right - rect.left) + 'px',
-      height: (rect.bottom - rect.top) + 'px' });
+    Object.assign(marqueeBox.style, {
+      left: rect.left + 'px', top: rect.top + 'px',
+      width: (rect.right - rect.left) + 'px',
+      height: (rect.bottom - rect.top) + 'px'
+    });
     marqueeBox.hidden = false;
   };
   const stop = cancelled => {
@@ -869,14 +880,18 @@ root.onpointerdown = e => {
     marqueeBox.hidden = true;
     if (cancelled) return;
     if (!moved) {
-      if (!e.ctrlKey && !e.shiftKey) select(null);
+      if (clickedId && itemById.has(clickedId)) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) selectModified(clickedId, Boolean(e.shiftKey));
+        else changeSelection(new Set([clickedId]), clickedId, clickedId, true);
+      } else if (!e.ctrlKey && !e.shiftKey && !e.metaKey) select(null);
       return;
     }
     const start = worldFromScreen(sx, sy);
     const finish = worldFromScreen(ex, ey);
     const rect = rectFromPoints(start.x, start.y, finish.x, finish.y);
     const ids = hitsRectangle(itemRects(), rect);
-    const combined = (e.ctrlKey || e.shiftKey) ? new Set(selectedBefore) : new Set();
+    const combined = (e.ctrlKey || e.shiftKey || e.metaKey)
+      ? new Set(selectedBefore) : new Set();
     for (const id of ids) combined.add(id);
     const primary = ids.at(-1) || [...combined].at(-1) || null;
     changeSelection(combined, primary, primary, true);
