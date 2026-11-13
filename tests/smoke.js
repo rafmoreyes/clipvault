@@ -1,0 +1,27 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const base = path.resolve(__dirname, '..');
+const read = p => fs.readFileSync(path.join(base, p), 'utf8');
+const pkg = JSON.parse(read('package.json'));
+assert.equal(pkg.main, 'main.js');
+assert.equal(pkg.scripts.start, 'electron .');
+assert.ok(/^\d+\.\d+\.\d+$/.test(pkg.devDependencies.electron));
+for (const p of ['main.js', 'preload.js', 'renderer/app.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
+const main = read('main.js');
+const html = read('renderer/index.html');
+const ignore = read('.gitignore');
+assert.match(main, /ClipVaultData/);
+assert.match(main, /contextIsolation:\s*true/);
+assert.match(main, /nodeIntegration:\s*false/);
+assert.match(main, /sandbox:\s*true/);
+assert.match(main, /clipboard\.readImage\(\)/);
+assert.match(main, /onBeforeRequest/);
+assert.match(main, /FILE\.test\(relative\)/);
+assert.match(html, /Content-Security-Policy/);
+assert.match(html, /default-src 'none'/);
+for (const p of ['renderer/app.js', 'renderer/style.css']) assert.ok(fs.existsSync(path.join(base, p)), p);
+for (const ext of ['png', 'jpg', 'jpeg', 'gif', 'webp']) assert.ok(ignore.includes('*.' + ext), ext + ' precisa ser ignorado');
+console.log('ClipVault Build 001: smoke tests estaticos OK.');

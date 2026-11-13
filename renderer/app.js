@@ -86,6 +86,7 @@ function addItem({ id, w, h }) {
 }
 
 root.onpointerdown = e => {
+  if (e.button !== 0) return;
   select(null); root.classList.add('pan'); root.setPointerCapture(e.pointerId);
   let lx = e.clientX, ly = e.clientY;
   root.onpointermove = m => { view.x += m.clientX - lx; view.y += m.clientY - ly; lx = m.clientX; ly = m.clientY; apply(); };
@@ -111,4 +112,4 @@ addEventListener('keydown', e => {
 
 vault.onNew(addItem);
 vault.onPause(setState);
-vault.load().then(r => { if (!r) return; layout = r.layout; setState(r.paused); r.items.forEach(addItem); apply(); });
+vault.load().then(r => { if (!r) return; layout = r.layout && typeof r.layout === 'object' && !Array.isArray(r.layout) ? r.layout : {}; setState(r.paused); r.items.forEach(addItem); apply(); }).catch(err => console.error('[ClipVault] Falha ao carregar:', err));
