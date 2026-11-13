@@ -18,3 +18,80 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #12151c; col
 
 /* A imagem em si só existe no DOM quando está visível no canvas. */
 .it { background: #111725; }
+
+/* Navegação por datas — overlay recolhível sem alterar o canvas. */
+#days-toggle, #days-panel { position: fixed; z-index: 20; font-family: inherit; }
+#days-toggle {
+  top: 12px; left: 12px; display: flex; align-items: center; gap: 9px;
+  background: #222938; color: #e0e9f2; border: 1px solid #405069;
+  border-radius: 10px; box-shadow: 0 6px 22px #0006; padding: 10px 14px;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+}
+#days-toggle:hover { border-color: #5ee0c1; background: #2b3547; }
+#days-toggle[aria-expanded="true"] { visibility: hidden; }
+#days-panel {
+  top: 12px; left: 12px; box-sizing: border-box; display: flex; flex-direction: column;
+  width: min(284px, calc(100vw - 24px)); max-height: calc(100vh - 26px);
+  height: min(540px, calc(100vh - 26px)); padding: 16px;
+  color: #e0e6f1; background: #1b202d;
+  border: 1px solid #374355; border-radius: 14px;
+  box-shadow: 0 16px 52px #000a;
+}
+#days-panel[hidden] { display: none; }
+.days-header { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.days-heading { display: flex; flex-direction: column; gap: 4px; }
+.days-heading strong { font-size: 16px; }
+#days-summary, #days-results { color: #8f9ab0; font-size: 12px; }
+#days-close {
+  font-size: 23px; line-height: 1; color: #a6b4c8; background: transparent;
+  border: 0; cursor: pointer; padding: 1px 5px; border-radius: 6px;
+}
+#days-close:hover { color: #fff; background: #313b4c; }
+.days-search-label {
+  display: block; font-size: 11px; color: #a4b0c4; margin: 19px 0 6px;
+}
+#days-search {
+  flex: none; box-sizing: border-box; width: 100%; padding: 10px 12px;
+  border: 1px solid #3b4659; border-radius: 9px;
+  background: #101723; color: #eaf5f4; outline: none; font: inherit;
+}
+#days-search:focus { border-color: #5ee0c1; box-shadow: 0 0 0 2px #5ee0c126; }
+#days-search::placeholder { color: #64738b; }
+#days-results { padding: 12px 1px 7px; }
+#days-list {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 5px;
+  scrollbar-width: thin; scrollbar-color: #45526a transparent;
+}
+.days-entry {
+  flex: none; box-sizing: border-box; display: flex; align-items: center;
+  justify-content: space-between; gap: 8px; width: 100%; padding: 11px 10px;
+  border: 1px solid transparent; border-radius: 9px;
+  background: transparent; color: #e0e6f1; text-align: left; cursor: pointer;
+  font: inherit;
+}
+.days-entry:hover { background: #273344; border-color: #3c5362; }
+.days-entry.is-active { background: #1f413f; border-color: #417b71; color: #a6f4db; }
+.days-entry-date { font-weight: 600; font-size: 13px; }
+.days-entry-count {
+  display: inline-block; flex: none; padding: 3px 7px;
+  border-radius: 7px; background: #30394b; color: #acbacb;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.days-entry.is-active .days-entry-count { color: #a6f4db; background: #305b51; }
+.days-empty { color: #8f9ab0; padding: 14px 7px; font-size: 12px; }
+#days-latest {
+  flex: none; margin-top: 14px; padding: 11px 12px;
+  background: #273647; color: #b8f5df; border: 1px solid #426156;
+  border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 600;
+}
+#days-latest:hover { background: #315045; }
+#days-latest:disabled { color: #657081; cursor: default; border-color: #353e4c; background: #232935; }
+#days-toggle:focus-visible, #days-close:focus-visible,
+.days-entry:focus-visible, #days-latest:focus-visible {
+  outline: 2px solid #5ee0c1; outline-offset: 2px;
+}
+#hud { z-index: 5; }
+@media (max-width: 460px) {
+  #days-panel { height: min(500px, calc(100vh - 26px)); }
+}

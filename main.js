@@ -185,7 +185,7 @@ app.whenReady().then(async () => {
     let relative;
     try { relative = decodeURIComponent(u.pathname).replace(/^\/+/, ''); }
     catch { return new Response('', { status: 400 }); }
-    if (host === 'app' && !['index.html', 'app.js', 'style.css', 'visibility.js'].includes(relative)) {
+    if (host === 'app' && !['index.html', 'app.js', 'style.css', 'visibility.js', 'date-nav.js'].includes(relative)) {
       return new Response('', { status: 403 });
     }
     if ((host === 'data' || host === 'thumb') && !FILE.test(relative)) {

@@ -1,4 +1,4 @@
-# ClipVault — Build 0.3.0
+# ClipVault — Build 0.4.0
 
 Vault de imagens para **Windows 11**, inteiramente local. Captura imagens copiadas para o clipboard e organiza automaticamente em um canvas infinito com um frame por dia.
 
@@ -58,7 +58,7 @@ Fechar a janela não encerra a captura; o app continua na bandeja do Windows. A 
 
 **npm.cmd test** valida sintaxe, políticas de segurança, o contrato de leitura e escrita do clipboard com mocks, os caminhos de arquivos e a geração do ícone PNG/ICO. Esse comando não abre o Electron nem acessa seu banco de imagens.
 
-**Atenção:** um teste de uso real do executável, da bandeja e da colagem em outros aplicativos precisa ser realizado no Windows. Ainda não há miniaturas, limpeza automática ou início com Windows.
+**Atenção:** um teste de uso real do executável, da bandeja e da colagem em outros aplicativos precisa ser realizado no Windows. Ainda não há limpeza automática ou início com Windows.
 
 A Build 0.1.1 foi aprovada como baseline anterior; a 0.2.0 adiciona somente cópia de imagens e build portátil.
 
@@ -86,3 +86,19 @@ Execute `npm.cmd test` e `npm.cmd run build:win`, copie o novo `dist\\ClipVault.
 
 **Nota:** os testes automatizados cobrem lógica de viewport e cache, incluindo cenário geométrico com 10.000 imagens; não medem FPS real ou memória no seu Windows. A versão 0.2.1 permanece como baseline anterior para comparação.
 
+
+## Build 0.4.0 — Navegação por Datas
+
+- Um botão **▦ Dias** no canto superior esquerdo abre um painel recolhível, sem modificar os controles do canvas.
+- Cada data aparece em ordem decrescente, com a quantidade de capturas daquele dia. Clicar numa data posiciona o canvas no cabeçalho do frame correspondente.
+- **Pesquisar por data** aceita `13/11/2026`, `13_11_2026`, `2026-11`, `13/11`, `novembro`, `nov` e outras variações.
+- **Ctrl+F** abre e foca a pesquisa; **Enter** leva ao primeiro dia encontrado; **Esc** fecha o painel.
+- O botão **Voltar ao dia mais recente** leva para a data mais nova, independente de filtros anteriores.
+- As contagens são atualizadas após capturas novas e exclusões. Não há arquivos de índice extras, conexão de rede nem mudanças na organização dos PNGs ou em `layout.json`.
+- Busca e navegação não enviam imagens para nenhum serviço; toda a informação vem dos metadados já carregados localmente.
+
+### Validação
+
+`npm.cmd test` inclui testes de formatação, filtros e uma simulação de UI com vários dias. O empacotamento Windows continua em `npm.cmd run build:win` e o executável portátil em `dist\ClipVault.exe`.
+
+A virtualização e a geração local de miniaturas da versão 0.3 são mantidas. Teste prático com arquivos reais no Windows ainda é necessário antes de marcar esta build como baseline estável.

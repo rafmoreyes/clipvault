@@ -9,7 +9,7 @@ const pkg = JSON.parse(read('package.json'));
 assert.equal(pkg.main, 'main.js');
 assert.equal(pkg.scripts.start, 'electron .');
 assert.ok(/^\d+\.\d+\.\d+$/.test(pkg.devDependencies.electron));
-for (const p of ['main.js', 'preload.js', 'renderer/app.js', 'clipboard-image.js', 'clipboard-out.js', 'capture-name.js', 'thumbnail-cache.js', 'renderer/visibility.js', 'scripts/generate-icon.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
+for (const p of ['main.js', 'preload.js', 'renderer/app.js', 'clipboard-image.js', 'clipboard-out.js', 'capture-name.js', 'thumbnail-cache.js', 'renderer/visibility.js', 'renderer/date-nav.js', 'scripts/generate-icon.js']) { new vm.Script(read(p), { filename: p }); console.log('JS OK:', p); }
 const main = read('main.js');
 const renderer = read('renderer/app.js');
 const preload = read('preload.js');
@@ -25,6 +25,16 @@ assert.match(renderer, /vault:\/\/thumb\//);
 assert.match(renderer, /function mount\(it\)/);
 assert.match(renderer, /function unmount\(it\)/);
 assert.match(renderer, /function refreshVisible\(\)/);
+assert.match(renderer, /function jumpToDay\(day\)/);
+assert.match(renderer, /daysSearch\.oninput = renderDayList/);
+assert.match(renderer, /setDaysOpen\(true, true\)/);
+assert.match(renderer, /e\.target\?\.closest\?\.\('#days-panel'\)/);
+assert.match(main, /'date-nav\.js'/);
+assert.match(html, /id="days-panel"/);
+assert.match(html, /id="days-search"/);
+assert.match(html, /date-nav\.js/);
+assert.ok(pkg.scripts.test.includes('date-nav.test.js'));
+assert.ok(pkg.scripts.test.includes('date-panel.test.js'));
 assert.match(html, /visibility\.js/);
 assert.ok(pkg.build.files.includes('thumbnail-cache.js'));
 assert.ok(pkg.scripts.test.includes('visibility.test.js'));

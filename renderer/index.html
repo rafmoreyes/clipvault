@@ -4,7 +4,22 @@
 <title>ClipVault</title><link rel="stylesheet" href="style.css"></head>
 <body>
 <div id="root"><div id="world"></div></div>
+<button id="days-toggle" type="button" aria-controls="days-panel" aria-expanded="false" title="Navegar por datas (Ctrl+F)">
+  <span aria-hidden="true">▦</span> Dias
+</button>
+<aside id="days-panel" hidden aria-label="Navegação por datas">
+  <div class="days-header">
+    <div class="days-heading"><strong>Capturas por data</strong><span id="days-summary">Nenhum dia</span></div>
+    <button id="days-close" type="button" aria-label="Fechar painel de datas" title="Fechar painel">×</button>
+  </div>
+  <label class="days-search-label" for="days-search">Localizar um dia</label>
+  <input id="days-search" type="search" placeholder="13/11/2026 ou nov" autocomplete="off" spellcheck="false" />
+  <div id="days-results" role="status" aria-live="polite"></div>
+  <div id="days-list" role="list" aria-label="Dias com capturas"></div>
+  <button id="days-latest" type="button">Voltar ao dia mais recente</button>
+</aside>
 <div id="hud"><b id="state"></b><span>Clique na imagem para copiar • Ctrl+V em outro app • Ctrl+C: copiar selecionada • Del: apagar • Scroll: zoom • Ctrl+Alt+P: pausar</span><span id="copy-feedback" role="status" aria-live="polite"></span></div>
 <script src="visibility.js"></script>
+<script src="date-nav.js"></script>
 <script src="app.js"></script>
 </body></html>

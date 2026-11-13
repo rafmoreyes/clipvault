@@ -2,7 +2,11 @@
 
 const $ = id => document.getElementById(id);
 const root = $('root'), world = $('world'), state = $('state'), feedback = $('copy-feedback');
+const daysToggle = $('days-toggle'), daysPanel = $('days-panel'), daysClose = $('days-close');
+const daysSearch = $('days-search'), daysList = $('days-list'), daysResults = $('days-results');
+const daysSummary = $('days-summary'), daysLatest = $('days-latest');
 const { worldViewport, intersects } = window.ClipVaultVisibility;
+const { formatDay, filterDays } = window.ClipVaultDateNav;
 
 const MES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const HEAD = 90, CELL = 320, GAP = 24, COLS = 5;
@@ -12,6 +16,7 @@ const days = new Map(), itemById = new Map();
 let layout = {}, view = { x: 60, y: 60, k: 0.5 };
 let sel = null, saveTimer, visibleFrame = 0, ready = false, positionChanged = false;
 let copySeq = 0, feedbackTimer;
+let daysOpen = false, activeDay = null;
 const pendingNew = [];
 
 const fmt = day => {
@@ -38,6 +43,82 @@ function scheduleVisible() {
     refreshVisible();
   });
 }
+
+function dayStats() {
+  return [...days.values()].map(D => ({ day: D.day, count: D.items.length }));
+}
+function renderDayList() {
+  const stats = dayStats();
+  const total = stats.reduce((sum, item) => sum + item.count, 0);
+  daysSummary.textContent = stats.length + (stats.length === 1 ? ' dia' : ' dias') +
+    ' · ' + total + (total === 1 ? ' imagem' : ' imagens');
+  daysLatest.disabled = stats.length === 0;
+  if (!daysOpen) return; // Não cria centenas de botões com o painel fechado.
+  const found = filterDays(stats, daysSearch.value);
+  daysResults.textContent = found.length === 0
+    ? 'Nenhuma data encontrada'
+    : found.length + (found.length === 1 ? ' dia encontrado' : ' dias encontrados');
+  daysList.textContent = '';
+  if (!found.length) {
+    const empty = document.createElement('div');
+    empty.className = 'days-empty';
+    empty.textContent = stats.length ? 'Tente outra data ou mês.' : 'Copie uma imagem para começar.';
+    daysList.append(empty);
+    return;
+  }
+  for (const item of found) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'days-entry';
+    button.setAttribute('role', 'listitem');
+    button.setAttribute('aria-label', formatDay(item.day) + ': ' + item.count + ' imagens');
+    if (item.day === activeDay) {
+      button.classList.add('is-active');
+      button.setAttribute('aria-current', 'true');
+    }
+    const dateText = document.createElement('span');
+    dateText.className = 'days-entry-date';
+    dateText.textContent = formatDay(item.day);
+    const counter = document.createElement('span');
+    counter.className = 'days-entry-count';
+    counter.textContent = String(item.count);
+    button.append(dateText, counter);
+    button.onclick = () => jumpToDay(item.day);
+    daysList.append(button);
+  }
+}
+function setDaysOpen(open, focusSearch = false) {
+  daysOpen = Boolean(open);
+  daysPanel.hidden = !daysOpen;
+  daysToggle.setAttribute('aria-expanded', String(daysOpen));
+  renderDayList();
+  if (daysOpen && focusSearch) daysSearch.focus();
+}
+function jumpToDay(day) {
+  const D = days.get(day);
+  if (!D) return;
+  activeDay = day;
+  select(null);
+  // Deixa o cabeçalho do dia visível à direita do painel recolhível.
+  view.x = daysOpen ? 310 : 60;
+  view.y = 76 - D.y * view.k;
+  apply();
+  renderDayList();
+}
+daysToggle.onclick = () => setDaysOpen(true, true);
+daysClose.onclick = () => { setDaysOpen(false); daysToggle.focus(); };
+daysSearch.oninput = renderDayList;
+daysSearch.onkeydown = e => {
+  if (e.key !== 'Enter') return;
+  const first = filterDays(dayStats(), daysSearch.value)[0];
+  if (first) jumpToDay(first.day);
+};
+daysLatest.onclick = () => {
+  const newest = filterDays(dayStats(), '')[0];
+  if (!newest) return;
+  daysSearch.value = '';
+  jumpToDay(newest.day);
+};
 
 async function copySelected(id) {
   if (!id) return;
@@ -135,6 +216,7 @@ function relayout() {
     Object.assign(D.el.style, { top: D.y + 'px', height: D.height + 'px' });
     y += D.height + 60;
   }
+  renderDayList();
   scheduleVisible();
 }
 function place(it) {
@@ -331,6 +413,22 @@ async function deleteSelected() {
   } catch (err) { console.error('[ClipVault] Falha ao excluir imagem:', err); }
 }
 addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  if (e.ctrlKey && !e.altKey && !e.shiftKey && key === 'f') {
+    e.preventDefault();
+    setDaysOpen(true, true);
+    daysSearch.select();
+    return;
+  }
+  if (e.key === 'Escape' && daysOpen) {
+    e.preventDefault();
+    setDaysOpen(false);
+    daysToggle.focus();
+    return;
+  }
+  // Não rouba Ctrl+C, Delete nem Home enquanto o usuário busca uma data.
+  if (e.target?.closest?.('#days-panel') ||
+      e.target?.matches?.('input, textarea, [contenteditable="true"]')) return;
   if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && sel) {
     e.preventDefault();
     if (!e.repeat) void copySelected(sel);
@@ -355,6 +453,8 @@ vault.load().then(result => {
   setState(result.paused);
   addBatch([...result.items, ...pendingNew]);
   pendingNew.length = 0;
+  const first = filterDays(dayStats(), '')[0];
+  if (!activeDay && first) activeDay = first.day;
   ready = true;
   apply();
 }).catch(err => console.error('[ClipVault] Falha ao carregar:', err));
