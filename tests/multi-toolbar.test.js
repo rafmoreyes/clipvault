@@ -40,7 +40,7 @@ const images = [
 const keys = ['root','world','state','copy-feedback',
   'days-toggle','days-panel','days-close','days-search','days-list',
   'days-results','days-summary','days-latest','selection-toolbar',
-  'selection-count','selection-export','selection-delete','selection-clear', 'tool-pan', 'tool-select', 'marquee-box',
+  'selection-count','selection-export','selection-delete','selection-clear', 'marquee-box',
     'storage-toggle', 'storage-panel', 'storage-close', 'storage-status',
     'storage-days', 'storage-trash-list', 'storage-active-size', 'storage-active-count',
     'storage-cache-size', 'storage-trash-size', 'storage-clean', 'storage-empty', 'storage-refresh'];
@@ -103,8 +103,14 @@ async function run() {
   pointer(one);
   one.onpointerup();
   await Promise.resolve();
-  assert.deepEqual(copied, ['2026-11-13/first.png']);
+  assert.deepEqual(copied, [], 'Clique simples seleciona e não copia automaticamente');
+  assert.equal(one.classList.contains('sel'), true);
   assert.equal(elements['selection-toolbar'].hidden, true);
+  // O fluxo de cópia continua disponível explicitamente pelo atalho Ctrl+C.
+  onKey({ key:'c', ctrlKey:true, altKey:false, shiftKey:false,
+    target:elements.root, preventDefault() {}, repeat:false });
+  await Promise.resolve();
+  assert.deepEqual(copied, ['2026-11-13/first.png']);
 
   pointer(two, { ctrlKey: true });
   assert.equal(copied.length, 1, 'Ctrl+Clique não altera o clipboard');
@@ -113,6 +119,10 @@ async function run() {
   pointer(three, { shiftKey: true });
   assert.equal(elements['selection-count'].textContent, '3 selecionadas');
   const before = Number.parseInt(one.style.left, 10);
+  pointer(one, { x: 10, y: 10 });
+  one.onpointerup();
+  assert.equal(elements['selection-count'].textContent, '3 selecionadas',
+    'Clicar numa imagem selecionada não desfaz a seleção múltipla');
   pointer(one, { x: 10, y: 10 });
   one.onpointermove({ clientX: 40, clientY: 30 });
   one.onpointerup();
@@ -135,6 +145,6 @@ async function run() {
   assert.equal(elements['selection-toolbar'].hidden, true);
   assert.equal(elements.world.children.length, 1);
   assert.equal(copied.length, 1);
-  console.log('ClipVault 0.5: clique, Ctrl/Shift, arraste, exportação e exclusão confirmada OK.');
+  console.log('ClipVault: seleção por clique, Ctrl+C, grupo intacto, arraste, exportação e exclusão OK.');
 }
 run().catch(err => { console.error(err); process.exitCode = 1; });

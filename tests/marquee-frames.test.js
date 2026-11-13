@@ -48,7 +48,7 @@ async function run() {
     'storage-toggle','storage-panel','storage-close','storage-status',
     'storage-days','storage-trash-list','storage-active-size','storage-active-count',
     'storage-cache-size','storage-trash-size','storage-clean','storage-empty','storage-refresh',
-    'tool-pan','tool-select','marquee-box'];
+    'marquee-box'];
   const elements = Object.fromEntries(ids.map(id => [id, new El()]));
   for (const id of ['days-panel','storage-panel','selection-toolbar','marquee-box']) elements[id].hidden = true;
   const data = [
@@ -84,55 +84,94 @@ async function run() {
   const img = world.children[0].children.find(child => child.tagName === 'img');
   assert.ok(img, 'Capture deve estar presente e clicável');
 
-  // Clique normal em imagem continua copiando.
-  img.onpointerdown({ button:0, ctrlKey:false, shiftKey:false, metaKey:false,
-    clientX:75,clientY:125,stopPropagation(){},preventDefault(){} });
+  const first = img;
+  const second = world.children[0].children.find(child =>
+    child.tagName === 'img' && child.getAttribute('data-clipvault-id') === '2026-11-13/b.png');
+  assert.ok(second, 'Segunda captura deve estar presente');
+  assert.equal(elements['tool-pan'], undefined);
+  assert.equal(elements['tool-select'], undefined);
+
+  const onImage = (target, x = 75, y = 125, ctrlKey = false, shiftKey = false) => ({
+    button: 0, pointerId: 4, target, clientX: x, clientY: y,
+    ctrlKey, shiftKey, metaKey: false, preventDefault(){}, stopPropagation(){}
+  });
+  const onBackground = (button, x, y) => ({
+    button, pointerId: 2, target: root, clientX: x, clientY: y,
+    ctrlKey: false, shiftKey: false, metaKey: false, preventDefault(){}
+  });
+
+  // LMB na imagem: seleciona. Não copia automaticamente.
+  img.onpointerdown(onImage(img));
+  assert.equal(first.classList.contains('sel'), true);
   img.onpointerup();
-  for (let i = 0; i < 3; i++) await Promise.resolve();
+  assert.deepEqual(copied, []);
+  // Ctrl+C ainda copia explicitamente a imagem selecionada.
+  keydown({ key:'c', ctrlKey:true, altKey:false, shiftKey:false, target:root,
+    preventDefault(){}, repeat:false });
+  for (let i = 0; i < 4; i++) await Promise.resolve();
   assert.deepEqual(copied, ['2026-11-13/a.png']);
 
-  // RMB no modo padrão deve fazer pan; LMB no fundo não faz pan.
-  root.onpointerdown({ button:2, pointerId:1, clientX:100,clientY:100, preventDefault(){} });
-  root.onpointermove({ clientX:150,clientY:125 });
+  // LMB arrastado sobre imagem selecionada move a imagem, não o canvas.
+  const initialX = Number.parseInt(img.style.left, 10);
+  img.onpointerdown(onImage(img));
+  img.onpointermove({ clientX: 95, clientY: 145 });
+  img.onpointerup();
+  assert.ok(Number.parseInt(img.style.left, 10) > initialX);
+  assert.equal(first.classList.contains('sel'), true);
+
+  // Clique simples no fundo desfaz a seleção.
+  root.onpointerdown(onBackground(0, 900, 450));
   root.onpointerup();
-  assert.ok(world.style.transform.startsWith('translate(110px,85px)'));
-  root.onpointerdown({ button:0, clientX:100,clientY:100 });
+  assert.equal(first.classList.contains('sel'), false);
+  assert.equal(elements['selection-toolbar'].hidden, true);
+  const transform = world.style.transform;
+  assert.equal(transform.includes('translate(60px,60px)'), true,
+    'LMB no fundo não pode mover a câmera');
+
+  // RMB SEMPRE faz Pan, sem alternância de ferramenta.
+  root.onpointerdown(onBackground(2, 100, 100));
+  root.onpointermove({ clientX: 150, clientY: 125 });
+  root.onpointerup();
   assert.ok(world.style.transform.startsWith('translate(110px,85px)'));
   keydown({ key:'Home', target:root, preventDefault(){} });
   assert.ok(world.style.transform.startsWith('translate(60px,60px)'));
 
-  // No modo Select, RMB CONTINUA fazendo pan e nunca inicia retângulo.
-  elements['tool-select'].onclick();
-  assert.equal(elements['tool-select'].attributes['aria-pressed'], 'true');
-  root.onpointerdown({ button:2, pointerId:2, clientX:100, clientY:100,
-    ctrlKey:false, shiftKey:false, preventDefault(){} });
-  root.onpointermove({ clientX:140, clientY:130 });
-  assert.ok(world.style.transform.startsWith('translate(100px,90px)'));
-  assert.equal(elements['marquee-box'].hidden, true, 'RMB nunca inicia seleção');
-  root.onpointerup();
-  keydown({ key:'Home', target:root, preventDefault(){} });
-
-  // Select usa SEMPRE LMB, inclusive iniciando o arraste sobre uma imagem.
-  let imageStoppedPropagation = false;
-  const pointerOnImage = { button:0, pointerId:3, clientX:75, clientY:125,
-    target:img, ctrlKey:false, shiftKey:false, metaKey:false,
-    preventDefault(){}, stopPropagation(){ imageStoppedPropagation = true; } };
-  img.onpointerdown(pointerOnImage);
-  assert.equal(imageStoppedPropagation, false, 'LMB em Select deve chegar ao canvas');
-  root.onpointerdown(pointerOnImage);
-  root.onpointermove({ clientX:365, clientY:229 });
+  // LMB ARRASTADO NO FUNDO abre seleção de área sem qualquer botão/atalho.
+  // Coordenadas cobrem as imagens a+b, mas não a imagem c.
+  root.onpointerdown(onBackground(0, 60, 105));
+  root.onpointermove({ clientX: 365, clientY: 229 });
   assert.equal(elements['marquee-box'].hidden, false);
   root.onpointerup();
   assert.equal(elements['marquee-box'].hidden, true);
   assert.equal(elements['selection-count'].textContent, '2 selecionadas');
-  assert.equal(copied.length, 1, 'Marquee não pode copiar no clipboard');
-  assert.ok(world.style.transform.startsWith('translate(60px,60px)'), 'Seleção não pode mover o canvas');
+  assert.equal(first.classList.contains('sel'), true);
+  assert.equal(second.classList.contains('sel'), true);
+  assert.equal(copied.length, 1, 'Selecionar área não deve copiar imagem');
 
-  // F cria frame nomeável, sem mover os PNGs nem as posições.
+  // Clicar novamente numa imagem selecionada preserva a seleção inteira.
+  img.onpointerdown(onImage(img));
+  img.onpointerup();
+  assert.equal(elements['selection-count'].textContent, '2 selecionadas');
+
+  // Arrastar qualquer imagem selecionada move o grupo, preservando spacing.
+  const aBefore = Number.parseInt(first.style.left, 10);
+  const bBefore = Number.parseInt(second.style.left, 10);
+  img.onpointerdown(onImage(img));
+  img.onpointermove({ clientX: 110, clientY: 145 });
+  img.onpointerup();
+  const aAfter = Number.parseInt(first.style.left, 10);
+  const bAfter = Number.parseInt(second.style.left, 10);
+  assert.equal(elements['selection-count'].textContent, '2 selecionadas');
+  assert.ok(aAfter > aBefore && bAfter > bBefore);
+  assert.equal(aAfter - aBefore, bAfter - bBefore,
+    'O grupo precisa manter o espaçamento');
+  assert.equal(copied.length, 1);
+
+  // F cria um frame visual nomeável para ambas as imagens selecionadas.
   keydown({ key:'f', target:root,ctrlKey:false,altKey:false,shiftKey:false,metaKey:false,
     repeat:false,preventDefault(){} });
   const overlay = world.children.find(child => child.className === 'named-frame');
-  assert.ok(overlay, 'Frame visual deve ser adicionado ao mundo');
+  assert.ok(overlay);
   assert.equal(persisted.length, 1);
   assert.deepEqual(persisted[0][0].ids, ['2026-11-13/a.png','2026-11-13/b.png']);
   const bar = overlay.children[0];
@@ -145,26 +184,14 @@ async function run() {
   assert.equal(persisted.at(-1)[0].name, 'Estudos de FX');
   assert.equal(elements['selection-toolbar'].hidden, true);
 
-  // Frame pode ser removido sem pedir exclusão dos PNGs.
+  // Remover o frame NÃO remove os arquivos nem as imagens do canvas.
   remove.onclick();
   assert.equal(persisted.at(-1).length, 0);
-  assert.equal(world.children.filter(child => child.tagName === 'div' && child.className === 'frame').length, 1);
+  assert.ok(world.children[0].children.includes(first));
+  assert.ok(world.children[0].children.includes(second));
   assert.equal(copied.length, 1);
+  assert.equal(elements['marquee-box'].hidden, true);
 
-  // Clique LMB sem arraste em Select escolhe a imagem (sem copiar).
-  const singleClick = { button:0, pointerId:4, clientX:80, clientY:135,
-    target:img, ctrlKey:false, shiftKey:false, metaKey:false,
-    preventDefault(){},stopPropagation(){} };
-  img.onpointerdown(singleClick);
-  root.onpointerdown(singleClick);
-  root.onpointerup();
-  assert.equal(elements['selection-count'].textContent, '1 selecionada');
-  assert.equal(copied.length, 1);
-
-  // S alterna Select para modo normal; RMB sempre navegou nos dois modos.
-  keydown({ key:'s',target:root,ctrlKey:false,altKey:false,shiftKey:false,metaKey:false,
-    repeat:false,preventDefault(){} });
-  assert.equal(elements['tool-pan'].attributes['aria-pressed'],'true');
-  console.log('ClipVault: RMB sempre Pan, Select LMB (inclusive sobre imagem), F frame e clipboard OK.');
+  console.log('ClipVault: LMB seleciona, arrasta imagem/grupo, seleciona área; RMB Pan e F frame OK.');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

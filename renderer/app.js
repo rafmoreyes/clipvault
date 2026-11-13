@@ -2,7 +2,7 @@
 
 const $ = id => document.getElementById(id);
 const root = $('root'), world = $('world'), state = $('state'), feedback = $('copy-feedback');
-const modePan = $('tool-pan'), modeSelect = $('tool-select'), marqueeBox = $('marquee-box');
+const marqueeBox = $('marquee-box');
 const daysToggle = $('days-toggle'), daysPanel = $('days-panel'), daysClose = $('days-close');
 const daysSearch = $('days-search'), daysList = $('days-list'), daysResults = $('days-results');
 const daysSummary = $('days-summary'), daysLatest = $('days-latest');
@@ -23,7 +23,7 @@ const IMAGE_ID = /^\d{4}-\d{2}-\d{2}\/[\w-]+\.png$/;
 const THUMB_SIZE = 512;
 const days = new Map(), itemById = new Map();
 const namedFrames = new Map();
-let frameCounter = 0, toolMode = 'pan';
+let frameCounter = 0;
 let layout = {}, view = { x: 60, y: 60, k: 0.5 };
 let sel = null, saveTimer, visibleFrame = 0, ready = false, positionChanged = false;
 const selected = new Set();
@@ -667,17 +667,18 @@ function assignSource(it) {
 function bindDrag(it) {
   const img = it.el;
   img.onpointerdown = e => {
-    // Select usa o botão esquerdo e precisa receber o gesto no canvas,
-    // inclusive quando ele começa em cima de uma imagem.
-    if (e.button !== 0 || toolMode === 'select') return;
+    // RMB SEMPRE atravessa para o canvas para fazer Pan.
+    if (e.button !== 0) return;
     e.stopPropagation();
-    if (batchBusy) return;
+    if (batchBusy || storageBusy) return;
+    e.preventDefault();
     if (e.ctrlKey || e.metaKey || e.shiftKey) {
-      e.preventDefault();
       selectModified(it.id, e.shiftKey);
-      return; // Nunca copia uma imagem com Ctrl/Shift+Clique.
+      return;
     }
-    // Clicar numa imagem já selecionada permite mover todo o grupo.
+
+    // Clicar em uma imagem selecionada preserva TODO o grupo.
+    // Só substituímos a seleção se a imagem clicada não faz parte dela.
     if (!selected.has(it.id)) select(it.id);
     const group = [...selected].map(id => itemById.get(id)).filter(Boolean);
     const origins = group.map(item => ({
@@ -687,6 +688,7 @@ function bindDrag(it) {
     let moved = false;
     img.setPointerCapture(e.pointerId);
     for (const item of group) item.dragging = true;
+
     img.onpointermove = m => {
       const dx = m.clientX - sx, dy = m.clientY - sy;
       if (!moved && Math.hypot(dx, dy) <= 5) return;
@@ -707,21 +709,20 @@ function bindDrag(it) {
       if (grows) relayout();
       else updateNamedFrames();
     };
-    const finish = cancelled => {
+    const finish = () => {
       img.onpointermove = img.onpointerup = img.onpointercancel = null;
       for (const item of group) item.dragging = false;
       if (moved) {
         for (const day of new Set(group.map(item => item.D))) recomputeBottom(day);
         relayout();
         save();
-      } else if (!cancelled) {
-        select(it.id);
-        void copySelected(it.id);
       }
+      // Clique sem movimento já selecionou no pointerdown.
+      // Não copia nem desfaz uma seleção múltipla.
       scheduleVisible();
     };
-    img.onpointerup = () => finish(false);
-    img.onpointercancel = () => finish(true);
+    img.onpointerup = finish;
+    img.onpointercancel = finish;
   };
 }
 function mount(it) {
@@ -801,16 +802,6 @@ function addBatch(items) {
   relayout();
   if (positionChanged) { positionChanged = false; save(); }
 }
-function setToolMode(next) {
-  toolMode = next === 'select' ? 'select' : 'pan';
-  root.classList.toggle('select-mode', toolMode === 'select');
-  modePan.classList.toggle('is-active', toolMode === 'pan');
-  modeSelect.classList.toggle('is-active', toolMode === 'select');
-  modePan.setAttribute('aria-pressed', String(toolMode === 'pan'));
-  modeSelect.setAttribute('aria-pressed', String(toolMode === 'select'));
-}
-modePan.onclick = () => setToolMode('pan');
-modeSelect.onclick = () => setToolMode('select');
 root.addEventListener('contextmenu', e => e.preventDefault());
 
 function worldFromScreen(x, y) {
@@ -825,7 +816,7 @@ function itemRects() {
   });
 }
 root.onpointerdown = e => {
-  // Pan é SEMPRE RMB, seja qual for a ferramenta esquerda selecionada.
+  // Botão direito SEMPRE faz Pan, sem modos ou seleção.
   if (e.button === 2) {
     e.preventDefault();
     root.setPointerCapture(e.pointerId);
@@ -845,21 +836,13 @@ root.onpointerdown = e => {
     root.onpointercancel = stop;
     return;
   }
+  if (e.button !== 0 || batchBusy || storageBusy) return;
 
-  if (batchBusy || storageBusy) return;
-  if (e.button !== 0) return;
-  if (toolMode !== 'select') {
-    // Sem Select, LMB em área vazia limpa a seleção.
-    select(null);
-    return;
-  }
-
-  // Select é SEMPRE LMB. Os eventos que começam sobre imagens chegam
-  // aqui porque bindDrag não os intercepta durante o modo Select.
+  // Eventos que começaram sobre imagens são processados por bindDrag.
+  // LMB no fundo: clique limpa seleção; arraste cria seleção retangular.
   e.preventDefault();
   root.setPointerCapture(e.pointerId);
   const sx = e.clientX, sy = e.clientY;
-  const clickedId = e.target?.getAttribute?.('data-clipvault-id');
   let moved = false, ex = sx, ey = sy;
   const selectedBefore = new Set(selected);
   marqueeBox.hidden = true;
@@ -880,15 +863,13 @@ root.onpointerdown = e => {
     marqueeBox.hidden = true;
     if (cancelled) return;
     if (!moved) {
-      if (clickedId && itemById.has(clickedId)) {
-        if (e.ctrlKey || e.metaKey || e.shiftKey) selectModified(clickedId, Boolean(e.shiftKey));
-        else changeSelection(new Set([clickedId]), clickedId, clickedId, true);
-      } else if (!e.ctrlKey && !e.shiftKey && !e.metaKey) select(null);
+      if (!e.ctrlKey && !e.shiftKey && !e.metaKey) select(null);
       return;
     }
     const start = worldFromScreen(sx, sy);
     const finish = worldFromScreen(ex, ey);
     const rect = rectFromPoints(start.x, start.y, finish.x, finish.y);
+    // Geometria das imagens, não elementos DOM: funciona com miniaturas virtualizadas.
     const ids = hitsRectangle(itemRects(), rect);
     const combined = (e.ctrlKey || e.shiftKey || e.metaKey)
       ? new Set(selectedBefore) : new Set();
@@ -1019,11 +1000,6 @@ addEventListener('keydown', e => {
       e.target?.closest?.('#storage-panel') ||
       e.target?.closest?.('#selection-toolbar') ||
       e.target?.matches?.('input, textarea, [contenteditable="true"]')) return;
-  if (!e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && !e.repeat && key === 's') {
-    e.preventDefault();
-    setToolMode(toolMode === 'pan' ? 'select' : 'pan');
-    return;
-  }
   if (!e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && !e.repeat && key === 'f' && selected.size) {
     e.preventDefault();
     createNamedFrame();

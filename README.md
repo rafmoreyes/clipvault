@@ -1,11 +1,11 @@
-# ClipVault — Build 0.7.1 (Pan RMB / Select LMB)
+# ClipVault — Build 0.7.2 (seleção automática sem modos)
 
 Vault de imagens para **Windows 11**, inteiramente local. Captura imagens copiadas para o clipboard e organiza automaticamente em um canvas infinito com um frame por dia.
 
 ## Novidade: reutilizar qualquer imagem
 
-- **Clique em uma imagem** do canvas para colocá-la automaticamente no clipboard (sinal de confirmação no rodapé).
-- Vá para outro aplicativo (Paint, Photoshop, Discord etc.) e use **Ctrl+V**. O app de destino precisa aceitar colagem de imagens.
+- **Clique em uma imagem** para selecioná-la. A seleção é visual e o clique não altera o clipboard.
+- Pressione **Ctrl+C** com uma imagem selecionada, vá ao Paint, Photoshop, Discord etc. e use **Ctrl+V**. O app de destino precisa aceitar colagem de imagens.
 - **Ctrl+C** dentro do ClipVault copia novamente a imagem selecionada.
 - Arrastar uma imagem no canvas **não** substitui seu clipboard.
 - Copiar uma imagem a partir do Vault **não** cria outra cópia armazenada no próprio Vault.
@@ -41,14 +41,14 @@ Para executar o projeto em modo de desenvolvimento, use **npm.cmd start**. Para 
 | Ação | Comando |
 | --- | --- |
 | Capturar imagem externa | Copie uma imagem (Ctrl+C no app de origem) |
-| Copiar imagem do Vault | Clique na imagem ou selecione e pressione Ctrl+C |
+| Copiar imagem do Vault | Selecione a imagem e pressione Ctrl+C |
 | Colar em outro aplicativo | Ctrl+V no aplicativo de destino |
-| Arrastar imagem | Arraste com botão esquerdo |
+| Arrastar imagem ou seleção | Arraste com botão esquerdo sobre uma imagem selecionada |
 | Zoom | Roda do mouse |
-| Ativar seleção retangular | Botão **Select** ou `S`, depois arraste com botão esquerdo |
-| Voltar ao modo Pan | Botão **Pan** ou `S` |
+| Selecionar múltiplas imagens | Clique e arraste com o botão esquerdo sobre o fundo do canvas |
+| Desfazer seleção | Clique esquerdo no fundo sem arrastar ou pressione Esc |
 | Criar frame nomeado | Selecione imagens e pressione `F`; digite nome e pressione Enter |
-| Mover canvas | No modo Pan, arraste com o botão direito |
+| Mover canvas | Botão direito + arrastar, sempre |
 | Retornar ao topo | Home |
 | Enviar imagem à lixeira | Selecione a imagem e pressione Delete |
 | Enviar um dia à lixeira | Botão **Apagar dia**, confirmação obrigatória |
@@ -83,7 +83,7 @@ As novas capturas recebem nomes como `13_11_2026_15h30m_01.png`, `13_11_2026_15h
 Execute `npm.cmd test` e `npm.cmd run build:win`, copie o novo `dist\\ClipVault.exe` para o Desktop e confira:
 1. Imagens antigas e posições preservadas.
 2. Zoom e pan fluidos entre vários dias.
-3. Clique para copiar e Ctrl+V em outro app.
+3. Selecione uma imagem, pressione Ctrl+C e depois Ctrl+V no outro app.
 4. Envio de imagem e dia à lixeira local, removendo a miniatura e permitindo restaurar o PNG.
 5. O cache `.thumbnails` é criado localmente apenas para imagens visitadas.
 
@@ -187,3 +187,19 @@ Teste a 0.7 no seu Windows antes de marcá-la como baseline. Encerre o executáv
 - **F** cria frame nomeável da seleção, como na 0.7.0.
 - Nenhuma alteração na captura, armazenamento, lixeira, formatos PNG ou protocolo de assets.
 - O teste de integração cobre RMB Pan no modo Select, seleção LMB iniciando sobre imagem, ausência de cópia acidental e preservação do frame.
+
+## Build 0.7.2 — Seleção contextual, sem modos
+
+Esta versão substitui a interação Pan/Select da 0.7.0 e da 0.7.1. Os controles anteriores desses dois capítulos são apenas histórico.
+
+- **LMB na imagem:** seleciona a imagem; segure e arraste para movê-la. Clique simples não copia mais automaticamente.
+- **LMB em uma imagem já selecionada:** conserva a seleção inteira. Arrastando essa imagem, movimenta todo o conjunto, sem separar as imagens ou alterar a relação entre elas.
+- **LMB no fundo, sem arrastar:** limpa a seleção.
+- **LMB no fundo, arrastando:** inicia automaticamente a seleção retangular (*marquee*). Não precisa ativar ferramenta. Ctrl ou Shift durante o arraste adicionam à seleção atual.
+- **RMB, sempre:** move o canvas. Não depende de estado, modo, tecla nem da seleção.
+- **Ctrl+C:** copia a única imagem selecionada para colar em outro aplicativo; não tenta copiar múltiplos PNGs de uma vez.
+- **F:** cria um frame nomeável para todas as imagens selecionadas, mantendo os PNGs e seus diretórios originais.
+- **Removidos:** botões Pan/Select e o atalho S. O canvas determina o comportamento a partir do botão utilizado e do ponto onde o gesto começou.
+- Os testes cobrem clique simples, deseleção, seleção por retângulo, preservação do grupo ao clicar, movimento conjunto, RMB Pan e criação/edição de frames, além das regressões anteriores.
+
+Não há mudanças na leitura do clipboard, captura automática, lixeira, pastas ou cache. Validar no Windows antes de aprovar como nova baseline.

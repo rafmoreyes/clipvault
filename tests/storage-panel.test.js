@@ -34,7 +34,7 @@ async function run() {
   const keys = ['root','world','state','copy-feedback',
     'days-toggle','days-panel','days-close','days-search','days-list',
     'days-results','days-summary','days-latest','selection-toolbar',
-    'selection-count','selection-export','selection-delete','selection-clear', 'tool-pan', 'tool-select', 'marquee-box',
+    'selection-count','selection-export','selection-delete','selection-clear', 'marquee-box',
     'storage-toggle','storage-panel','storage-close','storage-status',
     'storage-days','storage-trash-list','storage-active-size','storage-active-count',
     'storage-cache-size','storage-trash-size','storage-clean','storage-empty','storage-refresh'

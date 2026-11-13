@@ -223,23 +223,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #12151c; col
 @media (max-width: 650px) { #selection-toolbar { top: auto; } }
 
 
-/* 0.7 — Pan/Select e frames nomeáveis. Nada cobre os cliques nas imagens. */
-#mode-control {
-  position: fixed; z-index: 25; top: 12px; left: 50%;
-  transform: translateX(-50%); display: flex; align-items: center;
-  gap: 3px; padding: 4px; border: 1px solid #405069;
-  border-radius: 11px; background: #222938; box-shadow: 0 6px 22px #0006;
-}
-#mode-control button {
-  color: #a1aec2; background: transparent; border: 0; border-radius: 7px;
-  padding: 7px 13px; font: 600 12px "Segoe UI", system-ui, sans-serif;
-  cursor: pointer;
-}
-#mode-control button:hover { background: #374455; color: #fff; }
-#mode-control button.is-active { color: #152a2a; background: #5ee0c1; }
-#mode-control button:focus-visible { outline: 2px solid #5ee0c1; outline-offset: 2px; }
-#root.select-mode { cursor: crosshair; }
-#root.select-mode .it { cursor: crosshair; }
+/* 0.7.2 — Seleção automática com LMB, Pan permanente com RMB. */
 #root.pan { cursor: grabbing; }
 #marquee-box {
   box-sizing: border-box; position: fixed; z-index: 30;
@@ -285,7 +269,4 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #12151c; col
 .named-frame-remove:hover { color: #fff; background: #864a47; }
 .named-frame-name:focus-visible, .named-frame-remove:focus-visible {
   outline: 2px solid #5ee0c1; outline-offset: 2px;
-}
-@media (max-width: 700px) {
-  #mode-control { top: 58px; }
 }
