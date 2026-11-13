@@ -1,7 +1,8 @@
-const { app, BrowserWindow, Tray, Menu, clipboard, nativeImage, protocol, net, ipcMain, session, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, clipboard, ClipboardItem, nativeImage, protocol, net, ipcMain, session, globalShortcut } = require('electron');
 const path = require('path'), fs = require('fs'), os = require('os'), crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { readClipboardImage } = require('./clipboard-image');
+const { copyVaultImage } = require('./clipboard-out');
 
 // Dados ficam FORA da pasta do projeto (nunca vao pro GitHub)
 const DATA = path.join(os.homedir(), 'ClipVaultData');
@@ -13,9 +14,16 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 let win, tray, paused = false, lastHash = null;
 let captureBusy = false, priming = false, generation = 0;
+let copyPending = 0, copyQueue = Promise.resolve();
 const two = n => String(n).padStart(2, '0');
 const hashOf = png => crypto.createHash('sha256').update(png).digest('hex');
 const icon = ([r, g, b]) => { const buf = Buffer.alloc(1024); for (let i = 0; i < 256; i++) buf.set([b, g, r, 255], i * 4); return nativeImage.createFromBitmap(buf, { width: 16, height: 16 }); };
+const iconPath = () => app.isPackaged ? path.join(process.resourcesPath, 'icon.png') : path.join(__dirname, 'build', 'icon.png');
+function trayIcon(isPaused) {
+  if (isPaused) return icon([120, 120, 120]);
+  const image = nativeImage.createFromPath(iconPath());
+  return image.isEmpty() ? icon([94, 224, 193]) : image.resize({ width: 16, height: 16 });
+}
 
 function dims(f) {
   const b = Buffer.alloc(24);
@@ -44,7 +52,7 @@ function listAll() {
 const readLayout = () => { try { const l = JSON.parse(fs.readFileSync(LAYOUT, 'utf8')); return l && typeof l === 'object' && !Array.isArray(l) ? l : {}; } catch { return {}; } };
 
 async function tick() {
-  if (paused || priming || captureBusy) return;
+  if (paused || priming || captureBusy || copyPending > 0) return;
   captureBusy = true;
   const currentGeneration = generation;
   try {
@@ -79,7 +87,7 @@ async function setPaused(p) {
     finally { if (currentGeneration === generation) priming = false; }
   }
   if (currentGeneration !== generation) return;
-  tray.setImage(icon(paused ? [120, 120, 120] : [94, 224, 193]));
+  tray.setImage(trayIcon(paused));
   tray.setToolTip(paused ? 'ClipVault (pausado)' : 'ClipVault (capturando)');
   tray.setContextMenu(buildMenu());
   if (win && !win.isDestroyed()) win.webContents.send('paused', paused);
@@ -96,6 +104,7 @@ function openWin() {
   if (win) { win.show(); win.focus(); return; }
   win = new BrowserWindow({
     width: 1400, height: 900, backgroundColor: '#12151c', autoHideMenuBar: true,
+    icon: fs.existsSync(iconPath()) ? iconPath() : undefined,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: false },
   });
   win.loadURL('vault://app/index.html');
@@ -106,6 +115,24 @@ function openWin() {
 
 const fromUI = e => Boolean(e.senderFrame && e.senderFrame.url === 'vault://app/index.html');
 ipcMain.handle('load', e => fromUI(e) ? { items: listAll(), layout: readLayout(), paused } : null);
+// Copia apenas um PNG já salvo. A cópia não cria um novo item no Vault.
+ipcMain.handle('copyImage', (e, id) => {
+  if (!fromUI(e) || typeof id !== 'string' || !FILE.test(id)) throw new Error('Imagem inválida');
+  copyPending++;
+  ++generation; // invalida qualquer leitura do monitor já iniciada
+  const job = copyQueue.then(async () => {
+    const png = await copyVaultImage({ id, dataDirectory: DATA, clipboard, ClipboardItem });
+    // O Windows pode recodificar um PNG ao colocá-lo no clipboard.
+    // Usa a representação lida de volta para não registrar cópias duplicadas.
+    let clipboardImage = null;
+    try { clipboardImage = await readClipboardImage(clipboard, nativeImage); }
+    catch (err) { console.warn('[ClipVault] Não foi possível conferir a imagem copiada:', err); }
+    lastHash = hashOf(clipboardImage ? clipboardImage.png : png);
+    return true;
+  });
+  copyQueue = job.catch(() => {});
+  return job.finally(() => { copyPending--; });
+});
 ipcMain.handle('saveLayout', (e, l) => {
   if (!fromUI(e) || !l || typeof l !== 'object' || Array.isArray(l)) return;
   fs.writeFileSync(LAYOUT + '.tmp', JSON.stringify(l)); fs.renameSync(LAYOUT + '.tmp', LAYOUT);
@@ -141,7 +168,7 @@ app.whenReady().then(async () => {
     if (!inside || inside.startsWith('..') || path.isAbsolute(inside)) return new Response('', { status: 403 });
     return net.fetch(pathToFileURL(f).toString());
   });
-  tray = new Tray(icon([94, 224, 193]));
+  tray = new Tray(trayIcon(false));
   tray.on('click', openWin);
   await setPaused(false);
   globalShortcut.register('Control+Alt+P', () => { void setPaused(!paused); });

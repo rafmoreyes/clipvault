@@ -1,14 +1,48 @@
 {
   "name": "clipvault",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
-  "description": "Clipboard local com canvas infinito para Windows",
+  "description": "Clipboard local com canvas infinito e copia de imagens para Windows",
   "main": "main.js",
   "scripts": {
+    "prestart": "node scripts/generate-icon.js",
     "start": "electron .",
-    "test": "node tests/smoke.js"
+    "test": "node tests/smoke.js && node tests/clipboard-out.test.js && node scripts/generate-icon.js && node tests/icon.test.js",
+    "prebuild:win": "node scripts/generate-icon.js",
+    "build:win": "electron-builder --win portable --x64 --publish never"
   },
   "devDependencies": {
-    "electron": "45.3.2"
+    "electron": "45.3.2",
+    "electron-builder": "26.18.1"
+  },
+  "build": {
+    "appId": "com.rafmoreyes.clipvault",
+    "productName": "ClipVault",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "clipboard-image.js",
+      "clipboard-out.js",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "ClipVault.exe"
+    }
   }
 }

@@ -1,0 +1,22 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const base = path.join(__dirname, '..');
+const png = fs.readFileSync(path.join(base, 'build', 'icon.png'));
+const ico = fs.readFileSync(path.join(base, 'build', 'icon.ico'));
+assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+assert.equal(png.readUInt32BE(16), 256);
+assert.equal(png.readUInt32BE(20), 256);
+assert.equal(ico.readUInt16LE(0), 0);
+assert.equal(ico.readUInt16LE(2), 1);
+assert.equal(ico.readUInt16LE(4), 1);
+assert.equal(ico.readUInt32LE(14), png.length);
+assert.equal(ico.readUInt32LE(18), 22);
+assert.deepEqual(ico.subarray(22), png);
+const ignore = fs.readFileSync(path.join(base, '.gitignore'),'utf8');
+assert.match(ignore, /^build\/$/m);
+assert.match(ignore, /^dist\/$/m);
+assert.match(ignore, /^\*\.exe$/m);
+console.log('Ícone PNG/ICO do cofre válido e imagens geradas ignoradas pelo Git.');

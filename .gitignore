@@ -20,3 +20,9 @@ ClipVaultData/
 *.log
 Thumbs.db
 .DS_Store
+
+# Gerados localmente; nunca enviar imagens, executaveis ou pacotes ao Git
+build/
+dist/
+*.exe
+*.asar

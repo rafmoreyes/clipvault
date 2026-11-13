@@ -1,15 +1,35 @@
 const $ = id => document.getElementById(id);
-const root = $('root'), world = $('world'), state = $('state');
+const root = $('root'), world = $('world'), state = $('state'), feedback = $('copy-feedback');
 const MES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const HEAD = 90, CELL = 320, GAP = 24, COLS = 5;
 const days = new Map();
 let layout = {}, view = { x: 60, y: 60, k: 0.5 }, sel = null, timer;
+let copySeq = 0, feedbackTimer;
 
 const fmt = d => { const [y, m, dd] = d.split('-'); return `${dd}-${MES[m - 1]}-${y.slice(2)}`; };
 const apply = () => { world.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`; };
 const save = () => { clearTimeout(timer); timer = setTimeout(() => vault.saveLayout(layout), 400); };
 const hOf = it => layout[it.id].w * it.h / it.w;
 const setState = p => { state.textContent = p ? 'Pausado' : 'Capturando'; state.className = p ? 'off' : ''; };
+
+async function copySelected(id) {
+  if (!id) return;
+  const request = ++copySeq;
+  clearTimeout(feedbackTimer);
+  feedback.textContent = 'Copiando imagem...';
+  feedback.classList.remove('error');
+  try {
+    await vault.copyImage(id);
+    if (request !== copySeq) return;
+    feedback.textContent = '✓ Copiada! Ctrl+V para colar em outro aplicativo';
+  } catch (err) {
+    if (request !== copySeq) return;
+    console.error('[ClipVault] Falha ao copiar imagem:', err);
+    feedback.textContent = 'Falha ao copiar imagem';
+    feedback.classList.add('error');
+  }
+  feedbackTimer = setTimeout(() => { if (request === copySeq) feedback.textContent = ''; }, 5000);
+}
 
 function select(id) {
   for (const D of days.values()) for (const it of D.items) it.el.classList.toggle('sel', it.id === id);
@@ -58,17 +78,28 @@ function relayout() {
 function bindDrag(it) {
   it.el.onpointerdown = e => {
     if (e.button !== 0) return;
-    e.stopPropagation(); select(it.id); it.el.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+    select(it.id);
+    it.el.setPointerCapture(e.pointerId);
     const p = layout[it.id], sx = e.clientX, sy = e.clientY, ox = p.x, oy = p.y;
+    let moved = false;
     it.el.onpointermove = m => {
-      p.x = Math.max(0, Math.round(ox + (m.clientX - sx) / view.k));
-      p.y = Math.max(0, Math.round(oy + (m.clientY - sy) / view.k));
+      const dx = m.clientX - sx, dy = m.clientY - sy;
+      if (!moved && Math.hypot(dx, dy) <= 5) return;
+      moved = true;
+      p.x = Math.max(0, Math.round(ox + dx / view.k));
+      p.y = Math.max(0, Math.round(oy + dy / view.k));
       place(it); relayout();
     };
-    it.el.onpointerup = () => { it.el.onpointermove = it.el.onpointerup = null; save(); };
+    const cleanup = () => { it.el.onpointermove = it.el.onpointerup = it.el.onpointercancel = null; };
+    it.el.onpointerup = () => {
+      cleanup();
+      if (moved) save();
+      else void copySelected(it.id); // clique coloca o PNG no clipboard
+    };
+    it.el.onpointercancel = () => { cleanup(); if (moved) save(); };
   };
 }
-
 function addItem({ id, w, h }) {
   const day = id.split('/')[0];
   let D = days.get(day);
@@ -101,6 +132,11 @@ root.addEventListener('wheel', e => {
 }, { passive: false });
 
 addEventListener('keydown', e => {
+  if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && sel) {
+    e.preventDefault();
+    if (!e.repeat) void copySelected(sel);
+    return;
+  }
   if (e.key === 'Home') { view = { x: 60, y: 60, k: 0.5 }; apply(); }
   if (e.key === 'Delete' && sel) {
     const id = sel, D = days.get(id.split('/')[0]), i = D.items.findIndex(x => x.id === id);
