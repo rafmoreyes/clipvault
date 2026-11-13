@@ -4,6 +4,7 @@ const { pathToFileURL } = require('url');
 const { readClipboardImage } = require('./clipboard-image');
 const { copyVaultImage } = require('./clipboard-out');
 const { saveCapturePng } = require('./capture-name');
+const { getThumbnailPath, removeThumbnail } = require('./thumbnail-cache');
 
 // Dados ficam FORA da pasta do projeto (nunca vao pro GitHub)
 const DATA = path.join(os.homedir(), 'ClipVaultData');
@@ -26,30 +27,45 @@ function trayIcon(isPaused) {
   return image.isEmpty() ? icon([94, 224, 193]) : image.resize({ width: 16, height: 16 });
 }
 
-function dims(f) {
+async function dims(f) {
   const b = Buffer.alloc(24);
-  const fd = fs.openSync(f, 'r');
+  const fd = await fs.promises.open(f, 'r');
   try {
-    if (fs.readSync(fd, b, 0, 24, 0) !== 24 || b.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('PNG invalido');
-  } finally { fs.closeSync(fd); }
+    const { bytesRead } = await fd.read(b, 0, 24, 0);
+    if (bytesRead !== 24 || b.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('PNG invalido');
+  } finally { await fd.close(); }
   const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
   if (!w || !h || w > 32768 || h > 32768) throw new Error('Dimensoes invalidas');
   return { w, h };
 }
-function listAll() {
-  const out = [];
-  if (!fs.existsSync(DATA)) return out;
-  for (const d of fs.readdirSync(DATA)) {
-    if (!DAY.test(d)) continue;
-    const dir = path.join(DATA, d);
-    if (!fs.statSync(dir).isDirectory()) continue;
-    for (const f of fs.readdirSync(dir).sort()) {
-      if (!/^[\w-]+\.png$/.test(f)) continue;
-      try { out.push({ id: `${d}/${f}`, ...dims(path.join(DATA, d, f)) }); } catch {}
+
+// Scaneia PNGs em lotes, sem bloquear o processo principal por milhares
+// de leituras sincronas. Miniaturas e layouts nao entram na listagem.
+async function listAll() {
+  const out = [], paths = [];
+  let entries;
+  try { entries = await fs.promises.readdir(DATA, { withFileTypes: true }); }
+  catch (err) { if (err.code === 'ENOENT') return out; throw err; }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !DAY.test(entry.name)) continue;
+    const day = entry.name;
+    const files = await fs.promises.readdir(path.join(DATA, day), { withFileTypes: true });
+    for (const file of files) {
+      if (!file.isFile() || !/^[\w-]+\.png$/.test(file.name)) continue;
+      paths.push({ id: day + '/' + file.name, file: path.join(DATA, day, file.name) });
     }
+  }
+  paths.sort((a, b) => a.id.localeCompare(b.id));
+  for (let i = 0; i < paths.length; i += 48) {
+    const batch = await Promise.all(paths.slice(i, i + 48).map(async entry => {
+      try { return { id: entry.id, ...(await dims(entry.file)) }; }
+      catch { return null; }
+    }));
+    for (const item of batch) if (item) out.push(item);
   }
   return out;
 }
+
 const readLayout = () => { try { const l = JSON.parse(fs.readFileSync(LAYOUT, 'utf8')); return l && typeof l === 'object' && !Array.isArray(l) ? l : {}; } catch { return {}; } };
 
 async function tick() {
@@ -115,7 +131,7 @@ function openWin() {
 }
 
 const fromUI = e => Boolean(e.senderFrame && e.senderFrame.url === 'vault://app/index.html');
-ipcMain.handle('load', e => fromUI(e) ? { items: listAll(), layout: readLayout(), paused } : null);
+ipcMain.handle('load', async e => fromUI(e) ? { items: await listAll(), layout: readLayout(), paused } : null);
 // Copia apenas um PNG já salvo. A cópia não cria um novo item no Vault.
 ipcMain.handle('copyImage', (e, id) => {
   if (!fromUI(e) || typeof id !== 'string' || !FILE.test(id)) throw new Error('Imagem inválida');
@@ -138,12 +154,18 @@ ipcMain.handle('saveLayout', (e, l) => {
   if (!fromUI(e) || !l || typeof l !== 'object' || Array.isArray(l)) return;
   fs.writeFileSync(LAYOUT + '.tmp', JSON.stringify(l)); fs.renameSync(LAYOUT + '.tmp', LAYOUT);
 });
-ipcMain.handle('del', (e, ids) => {
+ipcMain.handle('del', async (e, ids) => {
   if (!fromUI(e) || !Array.isArray(ids)) return;
-  for (const id of ids) if (FILE.test(id)) fs.rmSync(path.join(DATA, id), { force: true });
+  for (const id of ids) {
+    if (!FILE.test(id)) continue;
+    await fs.promises.rm(path.join(DATA, ...id.split('/')), { force: true });
+    await removeThumbnail(DATA, id);
+  }
 });
-ipcMain.handle('delDay', (e, d) => {
-  if (fromUI(e) && DAY.test(d)) fs.rmSync(path.join(DATA, d), { recursive: true, force: true });
+ipcMain.handle('delDay', async (e, day) => {
+  if (!fromUI(e) || !DAY.test(day)) return;
+  await fs.promises.rm(path.join(DATA, day), { recursive: true, force: true });
+  await fs.promises.rm(path.join(DATA, '.thumbnails', day), { recursive: true, force: true });
 });
 
 app.on('second-instance', openWin);
@@ -154,20 +176,35 @@ app.whenReady().then(async () => {
   // Sem rede: so o protocolo interno (vault://) e permitido
   session.defaultSession.webRequest.onBeforeRequest((d, cb) => cb({ cancel: !/^(vault|file|devtools|data):/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, cb) => cb(false));
-  protocol.handle('vault', req => {
+  protocol.handle('vault', async req => {
     const u = new URL(req.url);
-    const base = u.hostname === 'app' ? path.join(__dirname, 'renderer') : u.hostname === 'data' ? DATA : null;
-    if (!base) return new Response('', { status: 404 });
+    const host = u.hostname;
+    if (req.method !== 'GET' || !['app', 'data', 'thumb'].includes(host)) {
+      return new Response('', { status: 403 });
+    }
     let relative;
     try { relative = decodeURIComponent(u.pathname).replace(/^\/+/, ''); }
     catch { return new Response('', { status: 400 }); }
-    // Somente assets do app e PNGs capturados podem ser servidos.
-    if (u.hostname === 'app' && !['index.html', 'app.js', 'style.css'].includes(relative)) return new Response('', { status: 403 });
-    if (u.hostname === 'data' && !FILE.test(relative)) return new Response('', { status: 403 });
-    const f = path.resolve(base, relative);
-    const inside = path.relative(base, f);
+    if (host === 'app' && !['index.html', 'app.js', 'style.css', 'visibility.js'].includes(relative)) {
+      return new Response('', { status: 403 });
+    }
+    if ((host === 'data' || host === 'thumb') && !FILE.test(relative)) {
+      return new Response('', { status: 403 });
+    }
+    if (host === 'thumb') {
+      try {
+        const file = await getThumbnailPath(DATA, relative, nativeImage);
+        return net.fetch(pathToFileURL(file).toString());
+      } catch (err) {
+        console.warn('[ClipVault] Miniatura indisponivel:', err.message);
+        return new Response('', { status: 404 });
+      }
+    }
+    const base = host === 'app' ? path.join(__dirname, 'renderer') : DATA;
+    const file = path.resolve(base, relative);
+    const inside = path.relative(base, file);
     if (!inside || inside.startsWith('..') || path.isAbsolute(inside)) return new Response('', { status: 403 });
-    return net.fetch(pathToFileURL(f).toString());
+    return net.fetch(pathToFileURL(file).toString());
   });
   tray = new Tray(trayIcon(false));
   tray.on('click', openWin);

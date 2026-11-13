@@ -15,3 +15,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #12151c; col
 #copy-feedback { color: #5ee0c1; font-weight: 600; white-space: nowrap; }
 #copy-feedback.error { color: #ff907b; }
 @media (max-width: 1100px) { #hud > span:first-of-type { display: none; } }
+
+/* A imagem em si só existe no DOM quando está visível no canvas. */
+.it { background: #111725; }
